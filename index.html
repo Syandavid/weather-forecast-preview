@@ -1828,7 +1828,7 @@ body.loop-still .pill.bad {
   </div>
 </div>
 <script src="assets/weather-insights.js?v=31.47"></script>
-<script src="assets/route-weather.js?v=31.49"></script>
+<script src="assets/route-weather.js?v=31.54"></script>
 <script src="assets/storm-quality.js?v=31.48"></script>
 <script src="assets/map-weather.js?v=27.1"></script>
 <script src="assets/pro-weather.js?v=28"></script>
@@ -4487,9 +4487,7 @@ body.loop-still .pill.bad {
     if (!text) return null;
     const coordinate = routeCoordinate(text);
     if (coordinate) return coordinate;
-    const data = await getJson("https://geocoding-api.open-meteo.com/v1/search?name=" + encodeURIComponent(text) + "&count=1&language=zh&format=json");
-    const r = data && data.results && data.results[0];
-    return r ? { lat: r.latitude, lon: r.longitude, name: r.name, timezone: r.timezone, admin: [r.admin1, r.country].filter(Boolean).join(" · ") } : null;
+    return window.RouteWeather.geocode(text, getJson);
   }
   function routeSamples(route, count) {
     return window.RouteWeather.samples(route, count || 12);
@@ -4521,6 +4519,8 @@ body.loop-still .pill.bad {
   }
   async function queryRoute() {
     const status = $("routeStatus");
+    const searchButton = $('routeSearch');
+    if (searchButton.disabled) return;
     const fromText = $("routeFrom") && $("routeFrom").value.trim();
     const toText = $("routeTo") && $("routeTo").value.trim();
     const enteredTime = $("routeTime").value;
@@ -4528,12 +4528,20 @@ body.loop-still .pill.bad {
     if (!fromText || !toText) { if (status) status.textContent = "请填写起点和终点，或打开路线模式在地图上依次点击两处。"; return; }
     const requestId = ++state.routeRequest;
     clearRoute(false);
-    if (status) status.textContent = "正在解析地点、规划路线并读取沿途天气…";
+    searchButton.disabled = true;
+    searchButton.textContent = '查询中…';
+    let stage = '起点搜索';
+    if (status) status.textContent = "正在搜索起点…";
     try {
       const from = fromText ? await geocodeRoutePoint(fromText) : (state.city ? { lat: state.city.lat, lon: state.city.lon, name: state.city.name } : null);
+      if (requestId !== state.routeRequest) return;
+      stage = '终点搜索';
+      status.textContent = '已识别起点：' + from.name + ' · ' + (from.admin || '') + '；正在搜索终点…';
       const to = toText ? await geocodeRoutePoint(toText) : null;
       if (requestId !== state.routeRequest) return;
       if (!from || !to) throw new Error("地点未找到");
+      stage = '出发地时区查询';
+      status.textContent = '已识别：' + from.name + '（' + (from.admin || '地图点') + '） → ' + to.name + '（' + (to.admin || '地图点') + '）';
       if (!from.timezone) {
         const zoneData = await getJson('https://api.open-meteo.com/v1/forecast?latitude=' + from.lat + '&longitude=' + from.lon + '&timezone=auto&current=temperature_2m&forecast_days=1');
         from.timezone = zoneData.timezone;
@@ -4544,11 +4552,14 @@ body.loop-still .pill.bad {
       if (!departure.ok) { status.textContent = departure.reason; return; }
       const when = departure.time;
       if (when < Date.now()-60000) { status.textContent = '请使用当前或未来的出发时间；路线天气不支持历史出行。'; return; }
+      stage = '地图加载';
       await ensureSatMap();
       await setSatView("2d");
       if (state.satLayer !== "city") await setSatBase("city");
       if (requestId !== state.routeRequest) return;
       const routeUrl = OSRM_URL + from.lon + "," + from.lat + ";" + to.lon + "," + to.lat + "?alternatives=false&overview=full&geometries=geojson&steps=false&annotations=duration,distance";
+      stage = '道路规划';
+      status.textContent = '地点已识别，正在规划驾车路线（不是列车线路）…';
       const data = await getJson(routeUrl);
       const route = data && data.routes && data.routes[0];
       if (!route || !route.geometry || !route.geometry.coordinates) throw new Error("路线暂不可用");
@@ -4564,7 +4575,15 @@ body.loop-still .pill.bad {
       L.marker([to.lat, to.lon], { icon: endIcon, interactive: false }).addTo(state.routeLayer);
       state.routeLayer.addTo(state.satMap);
       const samples = routeSamples(route);
-      const weather = await loadRouteWeather(samples, when, requestId);
+      stage = '沿途天气加载';
+      status.textContent = '驾车路线已找到，正在读取沿途预计到达时天气…';
+      let weather;
+      let weatherFailed = false;
+      try { weather = await loadRouteWeather(samples, when, requestId); }
+      catch (_) {
+        weatherFailed = true;
+        weather = samples.map(s => Object.assign({point:s.point,arrival:when+s.elapsedSeconds*1000,etaMethod:s.etaMethod},window.RouteWeather.weather({},when,weatherMs),{reason:'天气服务暂不可用，请稍后重新查询'}));
+      }
       if (requestId !== state.routeRequest) return;
       state.routeWeatherLayer = L.layerGroup();
       weather.forEach(function (w, i) {
@@ -4576,12 +4595,16 @@ body.loop-still .pill.bad {
       state.routeWeatherLayer.addTo(state.satMap);
       state.satMap.fitBounds(L.geoJSON(route.geometry).getBounds().pad(.16), { maxZoom: 12, duration: prefersReduced() ? 0 : .7 });
       const km = (route.distance / 1000).toFixed(1), min = Math.round(route.duration / 60);
-      if (status) status.innerHTML = '<strong>沿途到达时天气</strong><br>' + escapeCityText(from.name) + ' → ' + escapeCityText(to.name) +
+      if (status) status.innerHTML = '<strong>' + (weatherFailed ? '驾车路线已找到 · 天气暂不可用' : '驾车沿途到达时天气') + '</strong><br>' + escapeCityText(from.name + '（' + (from.admin || '地图点') + '）') + ' → ' + escapeCityText(to.name + '（' + (to.admin || '地图点') + '）') +
         '<br>约 ' + km + ' km · ' + min + ' 分钟<br>出发 ' + escapeCityText(window.RouteWeather.timeLabel(when,from.timezone)) +
+        '<br>地点：' + escapeCityText(from.source || '地图选点') + ' / ' + escapeCityText(to.source || '地图选点') + ' · 道路：OSRM / OpenStreetMap（非铁路、非实时导航）' +
         '<br>' + escapeCityText(samples[0].etaMethod) + ' · 灰色：数据不足；绿色仅表示未触发所设阈值，不保证道路安全。' +
         '<div class="route-weather">' + weather.map((w,i)=>'<details class="route-weather-chip"><summary><i style="width:8px;height:8px;border-radius:50%;background:' + routeWeatherColor(w) + ';display:inline-block"></i>路线点 ' + (i+1) + ' · ' + (w.complete ? '查看到达时天气' : escapeCityText(w.reason)) + '</summary>' + routeWeatherDescription(w) + '</details>').join('') + '</div>';
     } catch (e) {
-      if (requestId === state.routeRequest && status) status.textContent = "路线或沿途天气暂不可用，请检查地点名称后重试。";
+      if (requestId === state.routeRequest && status) status.textContent = stage + '失败：' + (e.userMessage || (stage === '道路规划' ? '道路服务暂不可达或没有连通的驾车道路，请稍后重试；这不代表地点名称错误。' : '服务暂时不可用，请稍后重试。'));
+    } finally {
+      searchButton.disabled = false;
+      searchButton.textContent = '查询路线天气';
     }
   }
   function routeTimeDefault() {

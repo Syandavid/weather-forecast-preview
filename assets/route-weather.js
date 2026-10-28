@@ -2,6 +2,45 @@
   'use strict';
   const finite = v => typeof v === 'number' && Number.isFinite(v);
   const HOUR = 3600000;
+  const placeCache = new Map();
+  function placeError(message) { const error=new Error(message); error.userMessage=message; return error; }
+  function placeCandidates(data) {
+    const rows=Array.isArray(data?.features)?data.features.map(f=>{
+      const p=f.properties||{},xy=f.geometry?.type==='Point'?f.geometry.coordinates:[];
+      return {lat:xy?.[1],lon:xy?.[0],name:p.name||p.street||'',admin:[p.city,p.state,p.country].filter(Boolean).join(' · '),source:'Photon / OpenStreetMap'};
+    }):(data?.results||[]).map(p=>({lat:p.latitude,lon:p.longitude,name:p.name,timezone:p.timezone,admin:[p.admin1,p.country].filter(Boolean).join(' · '),source:'Open-Meteo / GeoNames'}));
+    return rows.filter(p=>p.name&&finite(p.lat)&&finite(p.lon)&&Math.abs(p.lat)<=90&&Math.abs(p.lon)<=180);
+  }
+  function choosePlace(text,rows) {
+    const key=s=>String(s).normalize('NFKC').replace(/\s/g,'').toLowerCase();
+    const exact=rows.filter(p=>key(p.name)===key(text));
+    const choices=exact.length?exact:rows;
+    if(!choices.length)return null;
+    // A station building and its station node may represent the same place.
+    // Never silently choose the first of distant namesakes.
+    const first=choices[0];
+    if(choices.some(p=>distance([first.lon,first.lat],[p.lon,p.lat])>250))
+      throw placeError('找到多个“'+text+'”，请补充城市/地区，或直接在地图上选点。');
+    return first;
+  }
+  async function geocode(text,request) {
+    text=String(text||'').trim();
+    if(!text)return null;
+    if(placeCache.has(text))return {...placeCache.get(text)};
+    let failed=false;
+    const urls=['https://photon.komoot.io/api/?limit=5&q='+encodeURIComponent(text),
+      'https://geocoding-api.open-meteo.com/v1/search?count=5&language=zh&format=json&name='+encodeURIComponent(text)];
+    for(const url of urls){
+      let data;
+      try { data=await request(url,{timeoutMs:12000}); } catch(_){failed=true;continue;}
+      const point=choosePlace(text,placeCandidates(data));
+      if(point){
+        if(placeCache.size>=100)placeCache.delete(placeCache.keys().next().value);
+        placeCache.set(text,point);return {...point};
+      }
+    }
+    throw placeError(failed?'地点搜索服务暂时不可达，请稍后重试，或在地图上选点。':'未找到“'+text+'”，请补充城市和完整地点名称，或在地图上选点。');
+  }
   function wallTime(ms, timezone) {
     if (!finite(ms) || !timezone) return '';
     try {
@@ -100,5 +139,5 @@
     if(row.code>=51||row.pop>=40||row.mm>0||row.wind>=10.8||row.gust>=17.2)return '#fbbf24';
     return '#4ade80';
   }
-  root.RouteWeather={wallTime,timeLabel,departure,samples,weather,color,windMs};
+  root.RouteWeather={wallTime,timeLabel,departure,samples,weather,color,windMs,placeCandidates,choosePlace,geocode};
 })(typeof window!=='undefined'?window:globalThis);
