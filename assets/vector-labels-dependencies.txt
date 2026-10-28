@@ -1,0 +1,30 @@
+2D vector labels dependency record — 2026-10-28
+
+Data/style: OpenFreeMap public instance, OpenMapTiles schema, OpenStreetMap data.
+https://openfreemap.org/quick_start/
+https://openfreemap.org/
+Official site permits free commercial usage; attribution required, no SLA.
+No registration/key, self-hosted service, bulk offline download or new paid plan is introduced here.
+Existing MapLibre runtime version remains unchanged.
+
+Bridge: @maplibre/maplibre-gl-leaflet 0.1.4 (ISC)
+https://github.com/maplibre/maplibre-gl-leaflet
+https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js
+Reviewed complete 9,296-byte browser bundle read-only before use.
+It creates a noninteractive MapLibre layer, follows Leaflet events, handles zoom - 1,
+and removes GL map/listeners when the Leaflet layer is removed. It uses some internal
+map APIs, so pan/zoom/resize and MapLibre-version compatibility need regression testing.
+No telemetry, credentials, file access, install hooks or automatic updater found in this bundle.
+
+Registry tarball verified against published dist.integrity, then decompressed in memory;
+the target JS file exactly matched the CDN response. No npm install or extraction to disk.
+Registry SHA-512:
+sha512-k57wcndZIvq3m08g2je4pjUPGr43ffNW3j+gXbymt8Vi2l1lUERUi1UmdTZcTPN8LuDDYOMWRNBaSLwpAu02ew==
+Browser SRI SHA-384 (enforced with crossorigin=anonymous):
+sha384-tXYNKOHx4T02jMP7YYCtBxPIv1B5gaA5mcVPBzqMp6d7VzWzxJgI2aWF/nJLrQdS
+Hashes establish byte consistency, not a guarantee against all supply-chain risks.
+
+Fallback: retain existing Esri raster labels until vector source load succeeds.
+Remove the fallback layers once ready so invisible raster tiles do not keep downloading.
+On startup failure or WebGL context loss restore fallback with an explicit fixed-language,
+fixed-density notice and a manual retry action. No endless automatic retry loop.
