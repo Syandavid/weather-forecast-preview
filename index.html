@@ -1518,7 +1518,7 @@ body.loop-still .pill.bad {
                 <div id="heroGlyph" aria-hidden="true"></div>
               </div>
               <div class="phrase-row">
-                <div class="phrase sk" id="phrase" aria-live="polite">正在获取天气</div>
+                <div class="phrase" id="phrase" aria-live="polite">正在获取天气</div>
               </div>
               <div id="currentEssentials" class="current-essentials"></div>
               <div id="nearOutlook" class="current-essentials" hidden></div>
@@ -1827,7 +1827,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">31.89</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">31.90</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -2668,7 +2668,6 @@ body.loop-still .pill.bad {
       $("outdoorWindows").textContent = '正在获取所选城市天气…';
       updateWeatherStamp(null, false, true);
       $("temp").classList.add("sk");
-      $("phrase").classList.add("sk");
       if ($("summary")) $("summary").classList.add("sk");
     }
     const q = "latitude=" + c.lat + "&longitude=" + c.lon + "&timezone=auto&wind_speed_unit=ms";
