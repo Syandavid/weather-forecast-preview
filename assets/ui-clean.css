@@ -155,6 +155,16 @@ button, summary { touch-action:manipulation; }
 #sat button { min-width:44px; min-height:44px; }
 #sat .leaflet-control-zoom a { width:44px !important; height:44px !important; line-height:44px !important; }
 #sat .sat-ticks { min-height:44px; }
+.sat-time-settings { color:var(--text); border-top:1px solid var(--line); }
+.sat-time-settings summary { min-height:44px; padding:12px 0; cursor:pointer; }
+.sat-time-settings label { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px; margin:4px 0; }
+.sat-time-settings select { min-height:44px; font:inherit; color:var(--text); background:var(--bg-2); border:1px solid var(--line); border-radius:8px; }
+.sat-time-settings small { display:block; line-height:1.5; color:var(--muted); }
+@media (max-width:600px) {
+  .sat-playbar-row { display:grid; grid-template-columns:auto minmax(0,1fr) auto; row-gap:0; }
+  .sat-playbar-row .sat-ticks { grid-column:1 / -1; width:100%; }
+  .sat-playbar-row .sat-play-time { min-width:0; white-space:normal; }
+}
 #sat .sat-legend { bottom:calc(var(--sat-playbar-height, 100px) + 126px); }
 #sat .sat-fab, #sat #satRouteBtn, #sat .sat-storms { bottom:calc(var(--sat-playbar-height, 100px) + 20px); }
 #sat .leaflet-bottom.leaflet-right { bottom:calc(var(--sat-playbar-height, 100px) + 20px); }

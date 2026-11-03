@@ -509,6 +509,7 @@ button { color: inherit; }
 }
 /* playback ticks */
 .sat-ticks {
+  touch-action:pan-y pinch-zoom; user-select:none;
   flex: 1; position: relative; height: 28px;
   display: flex; align-items: stretch; min-width: 0;
   cursor: pointer;
@@ -1386,7 +1387,7 @@ body.loop-still .pill.bad {
 .trend-tab.on { color:var(--text); background:rgba(78,162,255,.23); }
 .trend-chart { width:100%; min-height: 210px; margin-top: 8px; overflow:hidden; }
 .trend-chart svg { width:100%; height:210px; display:block; }
-.trend-chart svg { touch-action:none; }
+.trend-chart svg { touch-action:pan-y pinch-zoom; }
 .trend-grid { stroke: rgba(255,255,255,.1); stroke-width:1; stroke-dasharray:3 4; }
 .trend-line { fill:none; stroke:#4ea2ff; stroke-width:3; stroke-linecap:round; stroke-linejoin:round; }
 .trend-area { fill:url(#trendFill); opacity:.26; }
@@ -1457,7 +1458,7 @@ body.loop-still .pill.bad {
 @media (max-width: 480px) { .hero::before { background-position: 68% center; } }
 @media (prefers-reduced-motion: reduce) { .clothing-person, .clothing-umbrella, .clothing-rain, .sat-wind-barb.wind-flow { animation:none !important; } }
 </style>
-<link rel="stylesheet" href="assets/ui-clean.css?v=31.73">
+<link rel="stylesheet" href="assets/ui-clean.css?v=31.76">
 </head>
 <body>
 <div id="app">
@@ -1707,6 +1708,11 @@ body.loop-still .pill.bad {
               <input id="satOpacity" type="range" min="15" max="100" value="68" step="1">
               <small>降低透明度可让城市与道路更清晰；不会篡改原始云图。</small>
             </div>
+            <details class="sat-time-settings"><summary>时间与播放</summary>
+              <label>时间轴时区<select id="satClockMode"><option value="city">所选城市</option><option value="utc">世界时 UTC</option></select></label>
+              <label>动画速度<select id="satLoopSpeed"><option value="1000">慢速</option><option value="550" selected>标准</option><option value="350">快速</option></select></label>
+              <small>速度只改变播放节奏，不改变气象数据的更新频率。</small>
+            </details>
             <div class="sat-protect" id="satProtect">✓ 已选城市保护标记</div>
           </aside>
           <div class="sat-storms" id="satStorms">
@@ -2888,8 +2894,9 @@ body.loop-still .pill.bad {
   function trendSelectionText(s, mode) {
     if (!s) return "拖动图中的竖线，查看对应日期或时刻";
     const when = state.trendGranularity === "hourly" ? trendLabel(s.date) : s.date;
+    const deg=v=>Number.isFinite(v)?Math.round(v)+'°C':'—';
     const vals = mode === "temp"
-      ? (s.high == null ? "—" : Math.round(s.high) + "°C")
+      ? (state.trendGranularity==='hourly'?deg(s.high):'最高 '+deg(s.high)+' · 最低 '+deg(s.low))
       : mode === "rain" ? ((s.rain == null ? "—" : s.rain.toFixed(1) + " mm"))
       : (s.wind == null ? "—" : s.wind.toFixed(1) + " m/s");
     return (s.kind === "past" ? "历史" : "预报") + " · " + when + " · " + vals;
@@ -2917,16 +2924,22 @@ body.loop-still .pill.bad {
       for (let i=1;i<series.length;i++) if (Math.abs(x(i)-sx)<Math.abs(x(nearest)-sx)) nearest=i;
       return nearest;
     };
-    let dragging = false;
+    let activePointer = null;
     svg.addEventListener("pointerdown", function (e) {
-      dragging = true;
+      if (activePointer !== null || e.button !== 0 || e.isPrimary === false) return;
+      activePointer = e.pointerId;
       try { svg.setPointerCapture(e.pointerId); } catch (err) {}
       setIndex(fromEvent(e));
       e.preventDefault();
     });
-    svg.addEventListener("pointermove", function (e) { if (dragging) setIndex(fromEvent(e)); });
-    svg.addEventListener("pointerup", function () { dragging = false; });
-    svg.addEventListener("pointercancel", function () { dragging = false; });
+    svg.addEventListener("pointermove", function (e) { if (e.pointerId === activePointer) setIndex(fromEvent(e)); });
+    svg.addEventListener("pointerup", function (e) {
+      if (e.pointerId !== activePointer) return;
+      setIndex(fromEvent(e)); activePointer = null;
+    });
+    const cancel = e => { if (e.pointerId === activePointer) activePointer = null; };
+    svg.addEventListener("pointercancel", cancel);
+    svg.addEventListener("lostpointercapture", cancel);
     svg.setAttribute('tabindex','0');
     svg.setAttribute('role','slider');
     svg.setAttribute('aria-valuemin','0');
@@ -3800,7 +3813,7 @@ body.loop-still .pill.bad {
   function fmtPlayZh(d, isForecast) {
     if (!(d instanceof Date) || isNaN(d.getTime())) return "—";
     const clock=mapClock();
-    if(clock.fallback)return d.toISOString().slice(0,16).replace('T',' ')+' UTC'+(isForecast?' · 预报':'');
+    if(state.mapClockMode==='utc'||clock.fallback)return d.toISOString().slice(0,16).replace('T',' ')+' UTC'+(isForecast?' · 预报':'');
     const parts = ymdParts(d, clock);
     const get = function (t) { return partVal(parts, t); };
     const nowP = ymdParts(new Date(), clock);
@@ -3875,6 +3888,31 @@ body.loop-still .pill.bad {
     }
     return best;
   }
+  function bindMapScrub(ticks) {
+    let owner=null, pending=0, clientX=0;
+    let dragRect=null;
+    function seek(x) {
+      const n=playFrames().length,r=dragRect||ticks.getBoundingClientRect();
+      if(!n||r.width<=0||!Number.isFinite(x))return;
+      const idx=Math.max(0,Math.min(n-1,Math.round((x-r.left)/r.width*(n-1))));
+      if(idx!==state.radarIdx)showRadarFrame(idx);
+    }
+    function clear(){if(pending)cancelAnimationFrame(pending);pending=0;owner=null;dragRect=null;}
+    ticks.addEventListener('pointerdown',e=>{
+      if(owner!==null||e.isPrimary===false||e.button!==0)return;
+      owner=e.pointerId;dragRect=ticks.getBoundingClientRect();stopRadarLoop();
+      try{ticks.setPointerCapture(owner);}catch(_){}
+      seek(e.clientX);
+    });
+    ticks.addEventListener('pointermove',e=>{
+      if(e.pointerId!==owner)return;
+      clientX=e.clientX;
+      if(!pending)pending=requestAnimationFrame(()=>{pending=0;if(owner!==null)seek(clientX);});
+    });
+    ticks.addEventListener('pointerup',e=>{if(e.pointerId===owner){seek(e.clientX);clear();}});
+    for(const name of ['pointercancel','lostpointercapture'])ticks.addEventListener(name,e=>{if(e.pointerId===owner)clear();});
+    if(!window.PointerEvent)ticks.addEventListener('click',e=>{stopRadarLoop();seek(e.clientX);});
+  }
   function updatePlayhead() {
     const frames = playFrames();
     const n = frames.length;
@@ -3920,7 +3958,7 @@ body.loop-still .pill.bad {
     const fr = frames[idx];
     const dt = fr && fr.time ? new Date(fr.time * 1000) : null;
     if (timeEl) timeEl.textContent = dt ? fmtPlayZh(dt, fr && fr.kind === "forecast") : "时间待定";
-    const clock=mapClock(), zoneHint=clock.fallback?'所选地点时区未知，使用 UTC':'所选城市时间：'+clock.tz;
+    const clock=mapClock(), zoneHint=state.mapClockMode==='utc'?'世界时 UTC':clock.fallback?'所选地点时区未知，使用 UTC':'所选城市时间：'+clock.tz;
     ticks.setAttribute('aria-valuetext', dt && timeEl ? timeEl.textContent + '（'+zoneHint+'）' : '时间未提供');
     if (timeEl) timeEl.title = zoneHint;
     if (playBtn) {
@@ -6352,6 +6390,16 @@ body.loop-still .pill.bad {
         $("satBmap").classList.remove("open");
       });
     });
+    const clockMode=$('satClockMode'),loopSpeed=$('satLoopSpeed'),prefKey='weather-acceptance-map-playback';
+    let prefs={};try{prefs=JSON.parse(localStorage.getItem(prefKey))||{};}catch(_){}
+    state.mapClockMode=prefs.clock==='utc'?'utc':'city';
+    state.playDelay=[350,550,1000].includes(prefs.delay)?prefs.delay:550;
+    clockMode.value=state.mapClockMode;loopSpeed.value=String(state.playDelay);
+    const savePlayback=()=>{try{localStorage.setItem(prefKey,JSON.stringify({clock:state.mapClockMode,delay:state.playDelay}));}catch(_){}};
+    clockMode.addEventListener('change',()=>{state.mapClockMode=clockMode.value==='utc'?'utc':'city';savePlayback();updatePlayhead();});
+    loopSpeed.addEventListener('change',()=>{const delay=Number(loopSpeed.value);state.playDelay=[350,550,1000].includes(delay)?delay:550;savePlayback();
+      if(state.radarPlaying&&!document.hidden&&state.tab==='sat'&&state.satView==='2d')schedulePlayTick(state.playDelay);
+    });
     const satOpacity = $("satOpacity");
     if (satOpacity) satOpacity.addEventListener("input", function () {
       state.satOp = Math.max(0.15, Math.min(1, Number(satOpacity.value) / 100));
@@ -6427,15 +6475,8 @@ body.loop-still .pill.bad {
       setLegendOpen(false);
     });
     const ticks = $("satTicks");
-    if (ticks) ticks.addEventListener("click", function (e) {
-      stopRadarLoop();
-      const frames = playFrames();
-      if (!frames.length) return;
-      const rect = ticks.getBoundingClientRect();
-      const t = (e.clientX - rect.left) / Math.max(1, rect.width);
-      showRadarFrame(Math.round(t * (frames.length - 1)));
-    });
     if (ticks) {
+      bindMapScrub(ticks);
       ticks.tabIndex = 0;
       ticks.addEventListener('keydown', function (e) {
         if (!['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) return;
