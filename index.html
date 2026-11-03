@@ -283,6 +283,7 @@ button { color: inherit; }
 .map-wrap.view-3d #sat3dMap { display:block; }
 .map-wrap.view-3d .sat-playbar-row { display:none; }
 .map-wrap.view-3d .sat-playbar { padding-top:9px; }
+#boundaryReviewNotice:not([hidden]) { color:#ffe3a0; background:#33270d; border-left:3px solid #ffb000; padding:4px 8px; font-size:.8125rem; line-height:1.4; overflow-wrap:anywhere; }
 .map-wrap.view-3d .sat-legend { display:none !important; }
 .map-wrap.view-3d .sat-credit { color:rgba(255,255,255,0.58); }
 .maplibregl-ctrl-group { background:rgba(8,14,22,0.72) !important; border:1px solid rgba(255,255,255,0.16) !important; }
@@ -1456,7 +1457,7 @@ body.loop-still .pill.bad {
 @media (max-width: 480px) { .hero::before { background-position: 68% center; } }
 @media (prefers-reduced-motion: reduce) { .clothing-person, .clothing-umbrella, .clothing-rain, .sat-wind-barb.wind-flow { animation:none !important; } }
 </style>
-<link rel="stylesheet" href="assets/ui-clean.css?v=31.61">
+<link rel="stylesheet" href="assets/ui-clean.css?v=31.73">
 </head>
 <body>
 <div id="app">
@@ -1748,6 +1749,7 @@ body.loop-still .pill.bad {
               <button class="sat-now-btn" id="satNow" type="button">现在</button>
               <div class="sat-ticks" id="satTicks" role="slider" aria-label="时间轴"></div>
             </div>
+            <div id="boundaryReviewNotice" role="status" hidden>对照示意线未核准，不可作国界依据</div>
             <div class="sat-caption" id="satCaption">现在：雷达实况</div>
             <div class="sat-credit">© NASA · Esri · RainViewer</div>
             <div class="sat-credit" id="satLabelAttribution" hidden><a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://openmaptiles.org" target="_blank" rel="noopener">© OpenMapTiles</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></div>
@@ -2588,6 +2590,7 @@ body.loop-still .pill.bad {
     document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.getAttribute("data-tab") === id));
     syncMotion();
     scheduleRoadDetails();
+    scheduleBoundaryDetails();
     if (id === "sat") {
       if (state.satMap) refreshVisibleRadar(false);
       if (state.satView !== "pro") ensureSatMap().then(function () { if (state.pendingMapCity) focusSelectedMap(); maybeAutoplayRadar(); });
@@ -4473,12 +4476,7 @@ body.loop-still .pill.bad {
     if (level === 6) return "county";
     return "";
   }
-  function isChinaSpecialBoundary(tags) {
-    const name = String((tags && (tags["name:zh"] || tags.name || tags["official_name:zh"])) || "");
-    return /台湾|臺灣|西藏|Tibet|Xizang/i.test(name);
-  }
-  function boundaryStyle(kind, tags) {
-    if (state.chinaRangeOn && isChinaSpecialBoundary(tags)) return { color: "#ff5a5f", weight: 3.4, opacity: .98 };
+  function boundaryStyle(kind) {
     return { country: { color: "#38bdf8", weight: 3, opacity: .95 }, state: { color: "#a78bfa", weight: 2.5, opacity: .9 }, city: { color: "#fbbf24", weight: 2, opacity: .86 }, county: { color: "#fb7185", weight: 1.6, opacity: .8 } }[kind];
   }
   function clearBoundaryDetails() {
@@ -4487,6 +4485,10 @@ body.loop-still .pill.bad {
   }
   function scheduleBoundaryDetails() {
     if (state.boundaryTimer) clearTimeout(state.boundaryTimer);
+    state.boundaryRequest++;
+    state.boundaryAbort?.abort();
+    clearBoundaryDetails();
+    if (state.tab !== 'sat' || state.satView !== '2d') return;
     state.boundaryTimer = setTimeout(function () { loadBoundaryDetails(); }, 900);
   }
   async function loadBoundaryDetails() {
@@ -4499,22 +4501,23 @@ body.loop-still .pill.bad {
     if (north - south > 4.5 || east - west > 5.5) { clearBoundaryDetails(); return; }
     const requestId = ++state.boundaryRequest;
     const q = "[out:json][timeout:12];relation[boundary=administrative][admin_level~\"2|3|4|5|6\"](" + south.toFixed(5) + "," + west.toFixed(5) + "," + north.toFixed(5) + "," + east.toFixed(5) + ");out geom;";
+    const controller=state.boundaryAbort=new AbortController();
     try {
-      const data = await getOverpass(q);
+      const data = await getOverpass(q,{signal:controller.signal,timeoutMs:12000});
       if (requestId !== state.boundaryRequest || !state.satMap) return;
       clearBoundaryDetails();
       const group = L.layerGroup();
       (data.elements || []).forEach(function (rel) {
         const kind = boundaryCategory(rel.tags);
         if (!kind || !state.boundaryOptions[kind]) return;
-        const style = boundaryStyle(kind, rel.tags);
+        const style = boundaryStyle(kind);
         (rel.members || []).forEach(function (member) {
           if (!member.geometry || member.geometry.length < 2) return;
           L.polyline(member.geometry.map(function (p) { return [p.lat, p.lon]; }), Object.assign({ pane: "labelPane", className: "boundary-detail boundary-" + kind, interactive: false, dashArray: kind === "country" ? "" : "5 5" }, style)).addTo(group);
         });
       });
       state.boundaryDetailLayer = group.addTo(state.satMap);
-    } catch (e) {}
+    } catch (e) {} finally {if(state.boundaryAbort===controller)state.boundaryAbort=null;}
   }
   function clearRoute(cancelPending) {
     if (cancelPending) {
@@ -5202,6 +5205,7 @@ body.loop-still .pill.bad {
     }
   }
   function syncSatLy() {
+    $('boundaryReviewNotice').hidden = !state.chinaRangeOn;
     document.querySelectorAll("#satRail [data-overlay]").forEach(function (b) {
       const k = b.getAttribute("data-overlay");
       const on = ov(k);
