@@ -2763,7 +2763,7 @@ body.loop-still .pill.bad {
     endTime = endTime || "23:00";
     const url = "https://archive-api.open-meteo.com/v1/archive?latitude=" + c.lat + "&longitude=" + c.lon +
       "&start_date=" + start + "&end_date=" + end +
-      "&hourly=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m" +
+      ((Date.parse(end)-Date.parse(start))/86400000 < 31 ? "&hourly=temperature_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m" : "") +
       "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max" +
       "&timezone=auto&wind_speed_unit=ms";
     try {
@@ -3019,7 +3019,12 @@ body.loop-still .pill.bad {
     series.forEach(function (s, i) {
       if (labeled.has(i)) labels += '<text class="trend-label" text-anchor="' + (i===0?'start':i===series.length-1?'end':'middle') + '" x="' + x(i).toFixed(1) + '" y="' + (H - 7) + '">' + trendLabel(s.date) + '</text>';
       const fields = mode === "temp" ? ["high", "low"] : [mode === "rain" ? "rain" : "wind"];
-      fields.forEach(function (f) { if (s[f] != null && labeled.has(i)) points += '<circle class="trend-point" cx="' + x(i).toFixed(1) + '" cy="' + y(s[f]).toFixed(1) + '" r="3.4"><title>' + s.date + " " + s[f] + '</title></circle>'; });
+      fields.forEach(function (f) {
+        if(!Number.isFinite(s[f]))return;
+        const step=state.trendGranularity==='hourly'?3600000:86400000;
+        const joins=j=>series[j]?.kind===s.kind && Number.isFinite(series[j][f]) && Math.abs(stamps[j]-stamps[i])<=step;
+        if(labeled.has(i)||(!joins(i-1)&&!joins(i+1)))points += '<circle class="trend-point"'+(f==='low'?' style="fill:#ffb000"':'')+' cx="' + x(i).toFixed(1) + '" cy="' + y(s[f]).toFixed(1) + '" r="3.4"><title>' + s.date + " " + s[f] + '</title></circle>';
+      });
     });
     const area = mode === 'temp' || (highPath.match(/M/g)||[]).length!==1 || series.some(s=>!Number.isFinite(s[mode==='rain'?'rain':'wind'])) ? '' : (highPath ? highPath + ' L' + x(series.length-1).toFixed(1) + ' ' + (H-pad.b) + ' L' + x(0).toFixed(1) + ' ' + (H-pad.b) + ' Z' : '');
     const unit = mode === "temp" ? "°C" : mode === "rain" ? "mm" : "m/s";

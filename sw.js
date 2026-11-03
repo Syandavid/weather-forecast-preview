@@ -1,4 +1,4 @@
-const CACHE = "weather-acceptance-v31.78";
+const CACHE = "weather-acceptance-v31.79";
 const ASSETS = [
   "./index.html",
   "./assets/weather-insights.js?v=31.64",
