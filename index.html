@@ -1823,7 +1823,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">31.85</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">31.86</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -4030,7 +4030,7 @@ body.loop-still .pill.bad {
     if (state.satView === "3d") {
       el.textContent = state.sat3dStatus==='loading' ? '正在加载三维底图…失败时将返回二维天气图' :
         (state.sat3dStatus==='degraded' ? '三维底图部分图层未完整加载 · ' : '三维城市底图 · ') +
-        '建筑与地形依赖当地数据覆盖；云雨时间动画请使用2D天气 · 约2.5级以下为球体' +
+        (state.autoGlobe?'全球总览 · 继续放大将返回二维天气图（此处不播放云雨）':'建筑与地形依赖当地数据覆盖；云雨时间动画请使用2D天气 · 约2.5级以下为球体') +
         (state.sat3dMap?.getZoom ? ' · 缩放 '+state.sat3dMap.getZoom().toFixed(1)+'级' : '');
       return;
     }
@@ -4300,7 +4300,7 @@ body.loop-still .pill.bad {
   function sync3DLabels() {
     const map = state.sat3dMap;
     if (!map || !map.getStyle) return;
-    const visibility = state.labelsOn && (!map.getZoom || map.getZoom() >= 1) ? "visible" : "none";
+    const visibility = state.labelsOn && (!map.getZoom || map.getZoom() > 2.5) ? "visible" : "none";
     (map.getStyle()?.layers || []).forEach(function (layer) {
       if (!layer.id || !/label|highway-name|road[_-]shield|poi/i.test(layer.id)) return;
       try { map.setLayoutProperty(layer.id, "visibility", visibility); } catch (e) {}
@@ -4808,8 +4808,9 @@ body.loop-still .pill.bad {
   }
   function solarGeoJson() {
     const geo = solarGeometry(new Date());
+    const ring=geo.night.map(p=>[p[1],p[0]]);ring.push(ring[0].slice());
     return { type: "FeatureCollection", features: [
-      { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [geo.night.map(function (p) { return [p[1], p[0]]; })] } },
+      { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [ring] } },
       { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: geo.line.map(function (p) { return [p[1], p[0]]; }) } }
     ] };
   }
@@ -4859,7 +4860,7 @@ body.loop-still .pill.bad {
       onRemove:function(currentMap) { control.onRemove(currentMap); host.replaceChildren(); }
     }, 'top-right');
   }
-  async function ensure3DMap() {
+  async function ensure3DMap(camera) {
     const started=Date.now();
     state.sat3dStatus = state.sat3dMap ? state.sat3dStatus : 'loading';
     updateCaption();
@@ -4877,8 +4878,8 @@ body.loop-still .pill.bad {
     let map;
     try { map = new maplibregl.Map({
       container: "sat3dMap", style: MAPLIBRE_STYLE,
-      center: [initialCity.lon, initialCity.lat], zoom: 12,
-      pitch: 55, bearing: -12, maxZoom: 18, maxPitch: 78, antialias: true,
+      center: camera?[camera.lon,camera.lat]:[initialCity.lon, initialCity.lat], zoom: camera?camera.zoom:12,
+      pitch: camera?0:55, bearing: camera?0:-12, maxZoom: 18, maxPitch: 78, antialias: true,
       attributionControl: false
     }); } catch (_) { state.sat3dStatus='error';return null; }
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true, showZoom: true, showCompass: true }), "bottom-right");
@@ -4920,7 +4921,7 @@ body.loop-still .pill.bad {
         if(done || state.sat3dMap!==map)return;
         try {
           map.addSource("terrainSource", { type: "raster-dem", url: MAPLIBRE_TERRAIN, tileSize: 512, maxzoom: 12 });
-          map.setTerrain({ source: "terrainSource", exaggeration: 1.15 });
+          if(!camera || camera.zoom>5)map.setTerrain({ source: "terrainSource", exaggeration: 1.15 });
           map.addSource("hillshadeSource", { type: "raster-dem", url: MAPLIBRE_TERRAIN, tileSize: 512, maxzoom: 12 });
           const before = map.getLayer("building-3d") ? "building-3d" : undefined;
           map.addLayer({ id: "terrain-hillshade", type: "hillshade", source: "hillshadeSource", minzoom:5, paint: { "hillshade-exaggeration": 0.28 } }, before);
@@ -4972,7 +4973,12 @@ body.loop-still .pill.bad {
       });
       timer=setTimeout(function(){finish(false);},Math.max(1,12000-(Date.now()-started)));
     });
-    map.on("zoomend", function () { sync3DProjection(map); sync3DLabels(); });
+    map.on("zoomend", function () {
+      sync3DProjection(map); sync3DLabels();
+      if(state.autoGlobe && !state.satProjectionSync && state.tab==='sat' && state.satView==='3d' && map.getZoom()>=3.5){
+        const p=map.getCenter();setSatView('2d',{lat:p.lat,lon:p.lng,zoom:Math.round(map.getZoom()+1)});
+      }
+    });
     map.on('moveend', scheduleRoadDetails);
     return await state.sat3dReady;
   }
@@ -5373,6 +5379,10 @@ body.loop-still .pill.bad {
     pane("tyDotPane", 470, "auto");
     pane("tyMarkPane", 480, "auto");
     state.satMap = map;
+    map.on('zoomend',function(){
+      if(state.tab!=='sat'||state.satView!=='2d'||state.routeMode||map.getZoom()>2)return;
+      const p=map.getCenter();setSatView('3d',{lat:p.lat,lon:p.lng,zoom:Math.max(0,map.getZoom()-1)});
+    });
     map.getContainer().addEventListener("click", function (e) {
       if (e.target && e.target.closest && e.target.closest(".leaflet-control,.leaflet-marker-icon,.leaflet-popup")) return;
       const rect = map.getContainer().getBoundingClientRect();
@@ -6215,9 +6225,10 @@ body.loop-still .pill.bad {
       button.setAttribute("aria-pressed", button.getAttribute("data-view") === state.satView ? "true" : "false");
     });
   }
-  async function setSatView(mode) {
+  async function setSatView(mode, camera) {
     const request = ++satViewRequest;
     const next = mode === "pro" ? "pro" : mode === "3d" ? "3d" : "2d";
+    state.autoGlobe=false;
     state.satView = next;
     if (next !== "2d") stopRadarLoop();
     syncSatView();
@@ -6226,13 +6237,15 @@ body.loop-still .pill.bad {
     if (next === "2d") {
       state.satView = "2d";
       syncSatView();
-      state.pendingMapCity = true;
-      focusSelectedMap();
+      if(camera && state.satMap){
+        state.pendingMapCity=false;state.satMap.invalidateSize();
+        state.satMap.setView([camera.lat,camera.lon],camera.zoom,{animate:false});
+      }else{state.pendingMapCity = true;focusSelectedMap();}
       setTimeout(invalidateMaps, 80);
       updateCaption();
       return;
     }
-    const map = await ensure3DMap();
+    const map = await ensure3DMap(camera);
     if (request !== satViewRequest) return;
     if (!map) {
       state.satView = "2d";
@@ -6246,6 +6259,10 @@ body.loop-still .pill.bad {
     map.resize();
     update3DCityMarker();
     sync3DLabels();
+    if(camera){
+      map.jumpTo({center:[camera.lon,camera.lat],zoom:camera.zoom,pitch:0,bearing:0});
+      sync3DProjection(map);state.autoGlobe=true;updateCaption();return;
+    }
     const c = state.city || DEFAULT_CITY;
     map.flyTo({ center: [c.lon, c.lat], zoom: Math.max(12, Math.min(14, map.getZoom() || 12)), pitch: 55, bearing: -12, duration: prefersReduced() ? 0 : 900 });
     updateCaption();
