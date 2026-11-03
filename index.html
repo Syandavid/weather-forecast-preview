@@ -4641,7 +4641,7 @@ body.loop-still .pill.bad {
       '<br>小时降水 ' + amount(w.mm,' mm') + ' · 风 ' + amount(w.wind,' m/s') + ' · 阵风 ' + amount(w.gust,' m/s') +
       '<br>' + escapeCityText(w.reason);
   }
-  async function drawRouteResult(requestId, route, from, to, weather) {
+  async function drawRouteResult(requestId, route, from, to) {
     const current = () => requestId === state.routeRequest && state.tab === 'sat';
     if (!current()) return false;
     if (!state.satMap) await ensureSatMap();
@@ -4658,6 +4658,11 @@ body.loop-still .pill.bad {
     L.marker([from.lat, from.lon], { icon: startIcon, interactive: false }).addTo(state.routeLayer);
     L.marker([to.lat, to.lon], { icon: endIcon, interactive: false }).addTo(state.routeLayer);
     state.routeLayer.addTo(state.satMap);
+    state.satMap.fitBounds(L.geoJSON(route.geometry).getBounds().pad(.16), { maxZoom: 12, duration: prefersReduced() ? 0 : .7 });
+    return true;
+  }
+  function drawRouteWeatherPoints(requestId,weather) {
+    if(requestId!==state.routeRequest || state.tab!=='sat' || state.satView!=='2d' || !state.satMap || !state.routeLayer)return false;
     state.routeWeatherLayer = L.layerGroup();
     weather.forEach(function (w, i) {
       const color = routeWeatherColor(w);
@@ -4666,7 +4671,6 @@ body.loop-still .pill.bad {
       marker.addTo(state.routeWeatherLayer);
     });
     state.routeWeatherLayer.addTo(state.satMap);
-    state.satMap.fitBounds(L.geoJSON(route.geometry).getBounds().pad(.16), { maxZoom: 12, duration: prefersReduced() ? 0 : .7 });
     return true;
   }
   async function queryRoute() {
@@ -4720,7 +4724,9 @@ body.loop-still .pill.bad {
       state.route = { from: from, to: to, when: when, route: route };
       const samples = routeSamples(route);
       stage = '沿途天气加载';
-      status.textContent = '驾车路线已找到，正在读取沿途预计到达时天气…';
+      const km = (route.distance / 1000).toFixed(1), min = Math.round(route.duration / 60);
+      status.textContent = '驾车路线已找到：约 '+km+' km · '+min+' 分钟。正在读取 '+samples.length+' 个途经点的天气…';
+      const roadDrawn=drawRouteResult(requestId,route,from,to).catch(()=>false);
       let weather;
       let weatherFailed = false;
       try { weather = await loadRouteWeather(samples, when, requestId, signal); }
@@ -4731,7 +4737,6 @@ body.loop-still .pill.bad {
       if (requestId !== state.routeRequest) return;
       if (!from.timezone && weather[0]?.timezone) from.timezone = weather[0].timezone;
       $('routeZone').textContent = (from.timezone ? '出发地时区：' + from.timezone : '出发地时区未知，出发时间以 UTC 显示') + ' · 行程耗时不包含实时拥堵';
-      const km = (route.distance / 1000).toFixed(1), min = Math.round(route.duration / 60);
       const completeCount=weather.filter(w=>w.complete).length;
       const heading=weatherFailed ? '驾车路线已找到 · 天气暂不可用' : completeCount===weather.length ? '驾车沿途到达时天气' : '驾车路线已找到 · '+completeCount+'/'+weather.length+' 个路线点有完整预报';
       if (status) status.innerHTML = '<strong>' + heading + '</strong><br>' + escapeCityText(from.name + '（' + (from.admin || '地图点') + '）') + ' → ' + escapeCityText(to.name + '（' + (to.admin || '地图点') + '）') +
@@ -4742,7 +4747,7 @@ body.loop-still .pill.bad {
         '<div class="route-weather">' + weather.map((w,i)=>'<details class="route-weather-chip"><summary><i style="width:8px;height:8px;border-radius:50%;background:' + routeWeatherColor(w) + ';display:inline-block"></i>路线点 ' + (i+1) + ' · ' + (w.complete ? '查看到达时天气' : escapeCityText(w.reason)) + '</summary>' + routeWeatherDescription(w) + '</details>').join('') + '</div>';
       // Map rendering is optional. A slow CDN, failed tile engine or stale
       // callback must never hide a usable itinerary or lock the query form.
-      drawRouteResult(requestId,route,from,to,weather).catch(()=>false).then(drawn=>{
+      roadDrawn.then(drawn=>drawn && drawRouteWeatherPoints(requestId,weather)).catch(()=>false).then(drawn=>{
         const note=$('routeMapNote');
         if(requestId===state.routeRequest && note)note.textContent=drawn?'路线与途经点已标在地图上。':'地图未就绪；可展开路线点，地图恢复后可重新查询以显示标注。';
       });
