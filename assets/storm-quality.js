@@ -1,6 +1,10 @@
 (function(root){
   'use strict';
-  function age(stamp,now){const t=Date.parse(stamp);return Number.isFinite(t)?(now-t)/3600000:Infinity;}
+  // A time without an explicit offset is not a UTC instant. Do not let
+  // the viewer's device zone change how old a cyclone position appears.
+  function instant(stamp){return typeof stamp==='string'&&/(?:Z|[+-]\d{2}:?\d{2})$/i.test(stamp)?Date.parse(stamp):NaN;}
+  function utcLabel(stamp){const t=instant(stamp);return Number.isFinite(t)?new Date(t).toISOString().slice(0,16).replace('T',' ')+' UTC':'时间未确认';}
+  function age(stamp,now){const t=instant(stamp);return Number.isFinite(t)?(now-t)/3600000:Infinity;}
   function normalizeSnapshot(raw){
     if(!raw||!Array.isArray(raw.storms)||!Array.isArray(raw.errors))return null;
     if(raw.storms.some(s=>!s||typeof s!=='object'))return null;
@@ -16,8 +20,8 @@
     const points=[];let rejected=0;
     for(const p of Array.isArray(storm.forecast)?storm.forecast:[]){
       if(!p||!Number.isFinite(p.lat)||!Number.isFinite(p.lon)||Math.abs(p.lat)>90||Math.abs(p.lon)>180){rejected++;continue;}
-      const base=Date.parse(p.baseTime),lead=p.leadH;
-      const explicit=typeof p.time==='string'?Date.parse(p.time):NaN;
+      const base=instant(p.baseTime),lead=p.leadH;
+      const explicit=instant(p.time);
       const anchored=Number.isFinite(base)&&Number.isFinite(lead)&&lead>0&&lead<=240;
       const time=anchored?base+lead*3600000:explicit;
       // Never shift an older forecast using the latest observation time.
@@ -73,5 +77,5 @@
     return {storms,notes,status,complete:Object.values(status).every(s=>s==='live'||s==='snapshot')};
   }
   const coverageNote='台风资料源为 CMA / NHC，尚非全球所有洋区完整覆盖；未接入或缺失资料不能理解为没有台风。';
-  root.StormQuality={merge,age,forecastPoints,coverageNote,normalizeSnapshot};
+  root.StormQuality={merge,age,utcLabel,forecastPoints,coverageNote,normalizeSnapshot};
 })(typeof window!=='undefined'?window:globalThis);
