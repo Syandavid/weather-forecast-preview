@@ -1825,7 +1825,7 @@ body.loop-still .pill.bad {
     <h2>说明</h2>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
-    <p>天气、16 天预报、历史趋势、空气质量和城市搜索来自 Open-Meteo。历史天气属于模型/再分析数据，不等同于气象站实测。真实色卫星来自 NASA GIBS 的 VIIRS / MODIS，东亚可见光与红外来自葵花 Himawari AHI。雷达来自 RainViewer。</p>
+    <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
     <p>台风资料来自 CMA / NHC，当前不是全球所有洋区的完整气旋清单。默认高清城市底图使用 Esri 影像，影像拍摄时间和清晰度因地点而异，不代表实时天气。</p>
     <p>预警根据台风实况和气温、未来 2 小时降雨/雷暴/阵风、高温、暴雨、大风、低温、大雾阈值生成。地图会自动定位到所选城市，云图透明度、高清城市底图和图层可调。</p>
     <p>“3D 城市”的道路、城镇名称和建筑由矢量底图提供。地图选点立即按坐标更新所选地点天气，不自动切换页面；路线模式下选点只设置路线起终点。3D 地形属于公共 DEM，部分地区的起伏精度和覆盖范围会有差异。</p>
@@ -5349,6 +5349,7 @@ body.loop-still .pill.bad {
       selectMapLocation(latlng.lat, latlng.lng);
     });
     map.on("moveend zoomend", function () {
+      if(state.satLayer==='infrared'||state.satHdOverlay==='infrared'){syncSatelliteTime();updateCaption();}
       refreshCityPills();
       scheduleMetGrid();
       scheduleRoadDetails();
@@ -5397,12 +5398,23 @@ body.loop-still .pill.bad {
   async function ensureSatFallback() {
     if (!state.satMap || !window.L) return;
     if (state.satBase) return;
+    const map = state.satMap;
     await pickDarkBase();
+    if (state.satMap !== map || state.satBase) return;
     const layer = darkTileLayer(9);
     if (darkBaseMode === "osm") state.satMap.getContainer().classList.add("leaflet-osm-dark");
     layer.addTo(state.satMap);
     try { layer.bringToBack(); } catch (e) {}
     state.satBase = layer;
+  }
+  function infraredSource(lat,lon) {
+    if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90)return null;
+    const rad=Math.PI/180;
+    const views=[['Himawari_AHI','葵花',140.7],['GOES-East_ABI','GOES-East',-75.2],['GOES-West_ABI','GOES-West',-137]];
+    let best=null, score=Math.cos(75*rad); // conservative centre-of-view guard, not an observed footprint
+    for(const [id,label,subLon] of views){const dot=Math.cos(lat*rad)*Math.cos((lon-subLon)*rad);
+      if(dot>score){score=dot;best={id:id+'_Band13_Clean_Infrared',label};}}
+    return best;
   }
   function syncSatelliteTime() {
     const fr=playheadFrame(); if(!fr)return;
@@ -5411,14 +5423,33 @@ body.loop-still .pill.bad {
     layers.forEach(function(layer){
       const owner=layer===state.satHdOverlayObj?'satHdOverlayObj':'satLayerObj', key=layer===state.satHdOverlayObj?'hdSatellite':'baseSatellite';
       layer.setOpacity(future?0:layer===state.satHdOverlayObj?Math.min(.52,state.satOp):state.satOp);
-      if(future){clearWeatherTileState(key);return;}
+      if(future){
+        if(layer.weatherKind==='infrared'){layer.weatherOutsideView=true;if(state.satMap?.hasLayer(layer))state.satMap.removeLayer(layer);}
+        clearWeatherTileState(key);return;
+      }
       if(!layer.weatherKind)return;
+      let template=layer.weatherTemplate, sourceLabel='';
+      if(layer.weatherKind==='infrared'){
+        const center=state.satMap?.getCenter();
+        const source=infraredSource(center?.lat,center?.lng);
+        if(!source){
+          layer.weatherOutsideView=true;
+          if(state.satMap?.hasLayer(layer))state.satMap.removeLayer(layer);
+          clearWeatherTileState(key);
+          state.satelliteLabel='视野中心暂无已接入的红外覆盖 · 空白不代表晴空，可切换真实色日合成';
+          if(state.satLayer==='infrared')ensureSatFallback();
+          return;
+        }
+        template=gibsUrl(source.id,'GoogleMapsCompatible_Level6','png');
+        sourceLabel=source.label+' ';
+      }
       let stamp=window.MapWeather.satelliteStamp(layer.weatherKind,fr.time);
       if(!stamp)return;
       if(layer.weatherKind==='truecolor'&&layer.weatherMaxDate&&stamp>layer.weatherMaxDate)stamp=layer.weatherMaxDate;
       layer.weatherStamp=stamp;
-      setWeatherTileFrame(layer,{url:layer.weatherTemplate.replace('{time}',stamp)},false,owner,key);
-      state.satelliteLabel=layer.weatherKind==='infrared'?'红外观测 '+stamp.replace('T',' ').replace('Z',' UTC')+'（有延迟）':'真实色日合成 '+stamp+'（UTC，同日不变）';
+      setWeatherTileFrame(layer,{url:template.replace('{time}',stamp)},false,owner,key);
+      if(layer.weatherOutsideView){layer.weatherOutsideView=false;layer.addTo(state.satMap);}
+      state.satelliteLabel=layer.weatherKind==='infrared'?sourceLabel+'红外观测 '+stamp.replace('T',' ').replace('Z',' UTC')+'（有延迟）':'真实色日合成 '+stamp+'（UTC，同日不变）';
     });
     if(future&&state.satLayer!=='city')ensureSatFallback();
   }
@@ -5433,7 +5464,7 @@ body.loop-still .pill.bad {
     if (state.satHdOverlay === "infrared") {
       const tm = himawariTime();
       url = gibsUrl("Himawari_AHI_Band13_Clean_Infrared", "GoogleMapsCompatible_Level6", "png").replace("{time}", tm);
-      maxNative = 6; attr = "NASA GIBS / Himawari";
+      maxNative = 6; attr = "NASA GIBS";
     } else {
       let tm = utcDate(0);
       const probe = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/" + tm + "/GoogleMapsCompatible_Level9/3/3/6.jpg";
@@ -5451,7 +5482,7 @@ body.loop-still .pill.bad {
     state.satHdOverlayObj.weatherTemplate=url.replace(/\/default\/[^/]+\//,'/default/{time}/');
     state.satHdOverlayObj.weatherMaxDate=url.split('/default/')[1].split('/')[0];
     syncSatelliteTime();
-    state.satHdOverlayObj.addTo(state.satMap);
+    if(!state.satHdOverlayObj.weatherOutsideView)state.satHdOverlayObj.addTo(state.satMap);
     updateCaption();
   }
   async function setSatBase(name) {
@@ -5472,7 +5503,7 @@ body.loop-still .pill.bad {
     } else if (name === "infrared") {
       const tm = himawariTime();
       url = gibsUrl("Himawari_AHI_Band13_Clean_Infrared", "GoogleMapsCompatible_Level6", "png").replace("{time}", tm);
-      maxZ = 6; iso = tm; attr = "NASA GIBS / Himawari";
+      maxZ = 6; iso = tm; attr = "NASA GIBS";
       state.satTimeFrames = [{ time: Math.floor(new Date(tm).getTime() / 1000), iso: tm, url: url }];
     } else {
       let tm = utcDate(0);
@@ -5519,7 +5550,7 @@ body.loop-still .pill.bad {
       state.satLayerObj.weatherMaxDate=iso.slice(0,10);
     }
     syncSatelliteTime();
-    state.satLayerObj.addTo(state.satMap);
+    if(!state.satLayerObj.weatherOutsideView)state.satLayerObj.addTo(state.satMap);
     ensureSatLabels();
     if (name === "city") setSatHdOverlay(state.satHdOverlay || "truecolor").catch(function () {});
     updatePlayhead();
