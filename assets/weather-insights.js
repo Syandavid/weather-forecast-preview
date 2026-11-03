@@ -95,8 +95,18 @@
     // Include every source interval, so a brief storm between display slots
     // cannot disappear just because the six cards did not sample it.
     const intervalRows=(source.time||[]).map((t,i)=>({time:epoch(t,w),code:(source.weather_code||[])[i],gust:(source.wind_gusts_10m||[])[i]})).filter(r=>r.time>now && r.time-minutes*60000<end);
-    const storm=intervalRows.some(r=>r.code>=95);
+    // A missing rain amount invalidates a rain sum, not an independent hazard signal.
+    const extraHazards=[];
+    if(minutes===60)for(let i=1;i<(minute.time||[]).length;i++){
+      const stop=epoch(minute.time[i],w),begin=epoch(minute.time[i-1],w);
+      if(stop-begin!==900000||stop<=now||begin>=end)continue;
+      const code=minute.weather_code?.[i],gust=minute.wind_gusts_10m?.[i];
+      if([95,96,99].includes(code)||(finite(gust)&&gust>=17.2))
+        extraHazards.push({start:Math.max(0,(begin-now)/60000),end:Math.min(120,(stop-now)/60000),code,gust});
+    }
+    const storm=intervalRows.concat(extraHazards).some(r=>[95,96,99].includes(r.code));
     const gusts=intervalRows.map(r=>r.gust).filter(v=>finite(v)&&v>=0);
+    for(const r of extraHazards)if(finite(r.gust)&&r.gust>=0)gusts.push(r.gust);
     const maxGust=gusts.length ? Math.max(...gusts) : peak('gust');
     const complete=total!==null && rows.every(r=>finite(r.code)&&finite(r.gust)&&finite(r.mm)) && intervalRows.every(r=>finite(r.code)&&finite(r.gust)&&r.gust>=0);
     const probabilities=(hourly.time||[]).map((t,i)=>({time:epoch(t,w),value:hourly.precipitation_probability?.[i]})).filter(r=>r.time>now&&r.time-HOUR<end);
@@ -106,7 +116,7 @@
       const stop=epoch(t,w),start=stop-minutes*60000,mm=source.precipitation?.[i];
       return {start:Math.max(0,(start-now)/60000),end:Math.min(120,(stop-now)/60000),rate:finite(mm)&&mm>=0?mm*60/minutes:null,iso:t,code:source.weather_code?.[i],gust:source.wind_gusts_10m?.[i]};
     }).filter(r=>r.end>r.start&&r.end>0&&r.start<120);
-    return {available:true,rows,intervals,minutes,total,complete,storm,maxGust,popComplete,maxPop:pops.length?Math.max(...pops):null,maxMm:peak('mm')};
+    return {available:true,rows,intervals,extraHazards,minutes,total,complete,storm,maxGust,popComplete,maxPop:pops.length?Math.max(...pops):null,maxMm:peak('mm')};
   }
   const activities={walk:{name:'散步',min:5,max:32,gust:12,uv:8},run:{name:'跑步',min:5,max:28,gust:10,uv:6},cycle:{name:'骑行',min:5,max:30,gust:8,uv:7}};
   function outdoor(w,activity='walk',now=Date.now()) {
