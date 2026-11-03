@@ -2108,7 +2108,11 @@ body.loop-still .pill.bad {
     const timer=setTimeout(abort,options.timeoutMs||18000);
     try {
       const r=await fetch(url,{cache:'no-store',signal:controller.signal});
-      if(!r.ok)throw new Error(String(r.status));
+      if(!r.ok){
+        const error=Object.assign(new Error(String(r.status)),{httpStatus:r.status});
+        if(options.roadResponse && r.status===400){try{error.roadCode=(await r.json()).code;}catch(_){}}
+        throw error;
+      }
       const ct=r.headers.get('content-type')||'';
       // The timeout also covers the response body, not just its headers.
       return ct.includes('json')?await r.json():unwrapJson(await r.text());
@@ -4702,7 +4706,8 @@ body.loop-still .pill.bad {
       const routeUrl = OSRM_URL + from.lon + "," + from.lat + ";" + to.lon + "," + to.lat + "?alternatives=false&overview=full&geometries=geojson&steps=false&annotations=duration,distance";
       stage = '道路规划';
       status.textContent = '地点已识别，正在规划驾车路线（不是列车线路）…';
-      const data = await getJson(routeUrl,{signal});
+      const data = await getJson(routeUrl,{signal,roadResponse:true});
+      if(data?.code && data.code!=='Ok')throw Object.assign(new Error('road response'),{roadCode:data.code});
       const route = data && data.routes && data.routes[0];
       if (!route || !route.geometry || !route.geometry.coordinates) throw new Error("路线暂不可用");
       if (requestId !== state.routeRequest) return;
@@ -4722,7 +4727,9 @@ body.loop-still .pill.bad {
       if (!from.timezone && weather[0]?.timezone) from.timezone = weather[0].timezone;
       $('routeZone').textContent = (from.timezone ? '出发地时区：' + from.timezone : '出发地时区未知，出发时间以 UTC 显示') + ' · 行程耗时不包含实时拥堵';
       const km = (route.distance / 1000).toFixed(1), min = Math.round(route.duration / 60);
-      if (status) status.innerHTML = '<strong>' + (weatherFailed ? '驾车路线已找到 · 天气暂不可用' : '驾车沿途到达时天气') + '</strong><br>' + escapeCityText(from.name + '（' + (from.admin || '地图点') + '）') + ' → ' + escapeCityText(to.name + '（' + (to.admin || '地图点') + '）') +
+      const completeCount=weather.filter(w=>w.complete).length;
+      const heading=weatherFailed ? '驾车路线已找到 · 天气暂不可用' : completeCount===weather.length ? '驾车沿途到达时天气' : '驾车路线已找到 · '+completeCount+'/'+weather.length+' 个路线点有完整预报';
+      if (status) status.innerHTML = '<strong>' + heading + '</strong><br>' + escapeCityText(from.name + '（' + (from.admin || '地图点') + '）') + ' → ' + escapeCityText(to.name + '（' + (to.admin || '地图点') + '）') +
         '<br>约 ' + km + ' km · ' + min + ' 分钟<br>出发 ' + escapeCityText(window.RouteWeather.timeLabel(when,from.timezone)) +
         '<br>地点：' + escapeCityText(from.source || '地图选点') + ' / ' + escapeCityText(to.source || '地图选点') + ' · 道路：OSRM / OpenStreetMap（非铁路、非实时导航）' +
         '<br><span id="routeMapNote">' + (state.satMap ? '正在标注地图…' : '地图未就绪，可先查看下方路线点。') + '</span>' +
@@ -4735,7 +4742,17 @@ body.loop-still .pill.bad {
         if(requestId===state.routeRequest && note)note.textContent=drawn?'路线与途经点已标在地图上。':'地图未就绪；可展开路线点，地图恢复后可重新查询以显示标注。';
       });
     } catch (e) {
-      if (requestId === state.routeRequest && status) status.textContent = stage + '失败：' + (e.userMessage || (stage === '道路规划' ? '道路服务暂不可达或没有连通的驾车道路，请稍后重试；这不代表地点名称错误。' : '服务暂时不可用，请稍后重试。')) + '（路线版 31.65）';
+      if (requestId === state.routeRequest && status) {
+        let hint=e.userMessage || '服务暂时不可用，请稍后重试。';
+        if(stage==='道路规划'){
+          if(e.roadCode==='NoRoute')hint='未找到连通的驾车路线。试试在车站入口附近的道路上选点。';
+          else if(e.roadCode==='NoSegment')hint='起点或终点未匹配到可驾车道路，请在附近道路上重新选点。';
+          else if(e.httpStatus===429)hint='道路服务请求过多，请稍后重试，无需修改站名。';
+          else if(e.name==='AbortError')hint='等待道路服务响应超时，请稍后重试，无需修改站名。';
+          else hint='未取得有效的道路服务响应，请稍后重试，无需修改站名。';
+        }
+        status.textContent=stage+'失败：'+hint+'（路线版 31.78）';
+      }
     } finally {
       if (requestId === state.routeRequest) {
         state.routeAbort = null;
