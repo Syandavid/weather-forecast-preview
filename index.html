@@ -1827,7 +1827,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">31.95</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">31.96</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -4005,13 +4005,12 @@ body.loop-still .pill.bad {
   function hourIndex(pt, unix) {
     const times = pt.hourly && pt.hourly.time;
     if (!times || !times.length) return -1;
-    let best = -1, d = Infinity;
-    for (let i = 0; i < times.length; i++) {
-      const tt = weatherMs(times[i], {timezone:'Asia/Shanghai',utc_offset_seconds:28800}) / 1000;
-      const dd = Math.abs(tt - unix);
-      if (dd < d) { d = dd; best = i; }
+    if(pt.indexedTimes!==times){
+      pt.hourLookup=new Map();
+      times.forEach((t,i)=>{if(Number.isFinite(t))pt.hourLookup.set(t,i);});
+      pt.indexedTimes=times;
     }
-    return d < 50 * 60 ? best : -1;
+    return pt.hourLookup.get(unix) ?? -1;
   }
   function metAt(pt, unix, future) {
     if (future && pt.hourly) {
@@ -4019,12 +4018,12 @@ body.loop-still .pill.bad {
       if (i >= 0) {
         const h = pt.hourly;
         return {
-          t: h.temperature_2m ? h.temperature_2m[i] : pt.t,
-          rh: h.relative_humidity_2m ? h.relative_humidity_2m[i] : pt.rh,
-          ws: h.wind_speed_10m ? h.wind_speed_10m[i] : pt.ws,
+          t: h.temperature_2m?.[i] ?? null,
+          rh: h.relative_humidity_2m?.[i] ?? null,
+          ws: h.wind_speed_10m?.[i] ?? null,
           gust: h.wind_gusts_10m ? h.wind_gusts_10m[i] : null,
-          wd: h.wind_direction_10m ? h.wind_direction_10m[i] : pt.wd,
-          p: h.surface_pressure ? h.surface_pressure[i] : pt.p,
+          wd: h.wind_direction_10m?.[i] ?? null,
+          p: h.surface_pressure?.[i] ?? null,
           mm: h.precipitation ? h.precipitation[i] : null,
           pop: h.precipitation_probability ? h.precipitation_probability[i] : null,
           cloud: h.cloud_cover ? h.cloud_cover[i] : null,
@@ -4051,7 +4050,8 @@ body.loop-still .pill.bad {
       if (future) {
         const active=ov('radar')||ov('precip')||ov('cloud');
         const fields=[ov('cloud')?'白灰：云量':'',ov('radar')||ov('precip')?'蓝紫：降水 mm/h':''].filter(Boolean).join('；');
-        const status=!active?'云量和降水图层已关闭':state.metLoadingKey?'云雨预报加载中':state.forecastRenderError?'云雨绘图暂不可用，请刷新':state.forecastRendering?'云雨绘制中'+(state.forecastRaster?'（暂显示上一帧）':''):state.fcUnavailable||!state.forecastRasterKnown?'当前时段/视野预报数据暂缺':'逐小时预报 · '+fields;
+        const previous=state.metGrid&&state.forecastRaster?'；仅保留上次覆盖区域':'';
+        const status=!active?'云量和降水图层已关闭':state.metLoadingKey?'云雨预报加载中'+previous:state.metLoadFailed?'云雨预报更新失败'+previous+'，空白不代表无雨':state.forecastRenderError?'云雨绘图暂不可用，请刷新':state.forecastRendering?'云雨绘制中'+(state.forecastRaster?'（暂显示上一帧）':''):state.fcUnavailable||!state.forecastRasterKnown?'当前时段/视野预报数据暂缺，空白不代表无雨':'逐小时预报 · '+fields;
         el.textContent=status+' · 模型采样插值，非未来卫星实拍';
       } else {
         const fr=playheadFrame(), radar=radarFrameAt(fr&&fr.time||Date.now()/1000);
@@ -5062,8 +5062,8 @@ body.loop-still .pill.bad {
     const pts = [];
     for (let i = 0; i <= nLat && pts.length < maxPoints; i++) {
       for (let j = 0; j <= nLon && pts.length < maxPoints; j++) {
-        let lon = west + (j / nLon) * lonSpan;
-        if (lon > 180) lon -= 360;
+        const rawLon = west + (j / nLon) * lonSpan;
+        const lon = ((rawLon + 180) % 360 + 360) % 360 - 180;
         pts.push({ lat: south + (i / nLat) * latSpan, lon: lon, row:i, col:j, unwrappedLon:west+(j/nLon)*lonSpan });
       }
     }
@@ -5233,8 +5233,17 @@ body.loop-still .pill.bad {
       return;
     }
     const key = metBoundsKey();
-    if (state.metLoadingKey === key || (!force && Date.now() < state.metRetryAt)) { drawMetFields(); return; }
-    if (!force && state.metGrid && state.metGrid.key === key && state.metGrid.points && state.metGrid.points.length) {
+    const now=Date.now(),age=now-(state.metGrid?.loadedAt??-Infinity);
+    if(age<0 || age>=30*60000)state.metGrid=null;
+    if(state.metLoadingKey && state.metLoadingKey!==key && state.metController){
+      state.metRequest++; state.metController.abort();state.metController=null;state.metLoadingKey='';
+    }
+    if(state.metLoadingKey===key){drawMetFields();return;}
+    const cooling=now<state.metRetryAt && (state.metRetryKey===key || state.metRetryKey==='*');
+    if(!force && cooling){state.metLoadFailed=true;drawMetFields();updateCaption();return;}
+    state.metLoadFailed=false;
+    if (!force && age<10*60000 && state.metGrid?.key === key && state.metGrid.points?.length) {
+      state.fcUnavailable=!state.metGrid.hasHourly;
       drawMetFields();
       updateCaption();
       return;
@@ -5253,7 +5262,7 @@ body.loop-still .pill.bad {
       const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lats + "&longitude=" + lons +
         "&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,surface_pressure" +
         "&hourly=precipitation,precipitation_probability,cloud_cover,weather_code,wind_speed_10m,wind_gusts_10m,temperature_2m,relative_humidity_2m,wind_direction_10m,surface_pressure" +
-        "&forecast_days=3&past_days=1&wind_speed_unit=ms&cell_selection=nearest&timezone=Asia/Shanghai";
+        "&forecast_days=3&past_days=1&wind_speed_unit=ms&cell_selection=nearest&timezone=GMT&timeformat=unixtime";
       const data = await getJson(url, { signal: controller.signal, timeoutMs: 12000 });
       if (request !== state.metRequest || key !== metBoundsKey()) return;
       const arr = Array.isArray(data) ? data : [data];
@@ -5267,13 +5276,19 @@ body.loop-still .pill.bad {
         pts[i].p = c.surface_pressure;
         if (d.hourly && d.hourly.time) pts[i].hourly = d.hourly;
       });
-      state.metGrid = { key: key, points: pts };
-      state.fcUnavailable = !arr.some(function (d) { return d && d.hourly && d.hourly.time; });
+      const hasHourly=arr.some(d=>Array.isArray(d?.hourly?.time)&&d.hourly.time.length>0);
+      if(!hasHourly && playheadIsFuture())throw Error('Missing hourly grid');
+      state.metGrid = { key, points:pts, loadedAt:Date.now(), hasHourly };
+      state.fcUnavailable = !hasHourly;
+      state.metRetryAt=0;state.metRetryKey='';
     } catch (e) {
       if (request !== state.metRequest || key !== metBoundsKey()) return;
-      state.fcUnavailable = true;
+      state.metLoadFailed=true;
+      const cacheAge=Date.now()-(state.metGrid?.loadedAt??-Infinity);
+      if(cacheAge<0 || cacheAge>=30*60000)state.metGrid=null;
+      state.fcUnavailable = !state.metGrid?.hasHourly;
       state.metRetryAt = Date.now() + 30000;
-      if (!state.metGrid || state.metGrid.key !== key) state.metGrid = null;
+      state.metRetryKey=e?.httpStatus===429?'*':key;
     } finally {
       if (request === state.metRequest) {
         state.metLoadingKey = '';
@@ -6687,6 +6702,8 @@ body.loop-still .pill.bad {
   document.addEventListener('visibilitychange', () => refreshVisibleRadar(false));
   function refreshTimeSensitiveCards() {
     if (document.hidden) return;
+    if(state.tab==='sat' && state.satView==='2d' && state.satMap && needsMet() && !state.metLoadingKey &&
+       (state.metLoadFailed || !state.metGrid || Date.now()-state.metGrid.loadedAt>=600000))loadMetGrid(false);
     updateWeatherStamp(state.weather, state.weatherCached, state.weatherLoading);
     renderNext2Hours(state.weather);
     renderExtremeAlert(state.weather || {});
