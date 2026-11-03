@@ -36,6 +36,7 @@
   function merge(live,snapshot,now=Date.now()){
     const storms=[],notes=[],status={};
     const recent=stamp=>age(stamp,now)>=-1&&age(stamp,now)<=3;
+    const validPosition=s=>age(s.time,now)>=-1&&age(s.time,now)<=12&&Number.isFinite(s.lat)&&Number.isFinite(s.lon)&&Math.abs(s.lat)<=90&&Math.abs(s.lon)<=180;
     for(const provider of ['CMA','NHC']){
       const result=live[provider];
       const freshLive=Array.isArray(result);
@@ -64,10 +65,15 @@
       }
       if(!rows){status[provider]='unavailable';notes.push(provider+' 数据缺失或快照已过期，当前活动状态未知');continue;}
       let excluded=0;
-      for(const s of rows){
-        const hours=age(s.time,now);
-        if(hours< -1||hours>12||!Number.isFinite(s.lat)||!Number.isFinite(s.lon)||Math.abs(s.lat)>90||Math.abs(s.lon)>180){excluded++;continue;}
+      for(let s of rows){
         if(s.status && s.status!=='start')continue;
+        // Respect the live inventory. Only recover an unusable fix for the same active ID.
+        if(s.dataSource==='源站' && s.id && !validPosition(s)){
+          const fix=fallback.find(x=>x.id===s.id && (!x.status||x.status==='start') && validPosition(x));
+          if(fix){s={...fix,dataSource:'快照补充'};status[provider]='partial';notes.push(provider+' 源站位置无效，已使用有效快照位置；以标注的观测时间为准');}
+        }
+        const hours=age(s.time,now);
+        if(!validPosition(s)){excluded++;continue;}
         const forecast=forecastPoints(s,now);
         storms.push({...s,ageHours:hours,forecast:forecast.points,forecastNote:forecast.rejected?'部分预报缺少可靠起报时间或已失效，未展示对应路径':''});
         if(forecast.rejected)notes.push(provider+' '+(s.nameZh||s.nameEn||s.id||'气旋')+' 的部分未来路径时效无法确认');

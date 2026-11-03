@@ -1840,7 +1840,7 @@ body.loop-still .pill.bad {
 </div>
 <script src="assets/weather-insights.js?v=31.64"></script>
 <script src="assets/route-weather.js?v=31.54"></script>
-<script src="assets/storm-quality.js?v=31.66"></script>
+<script src="assets/storm-quality.js?v=31.81"></script>
 <script src="assets/map-weather.js?v=27.1"></script>
 <script src="assets/pro-weather.js?v=28"></script>
 <script src="assets/city-search.js?v=31.32"></script>
@@ -3538,8 +3538,11 @@ body.loop-still .pill.bad {
     const box = $("tyList");
     const storms = state.storms.slice().sort(wpacFirst);
     if (!box) { syncStormHud(); return; }
+    const nhcStatus=state.stormQuality?.status?.NHC;
+    const nhcNotice=(nhcStatus==='partial'||nhcStatus==='unavailable')?
+      '<p>大西洋及东北、中北太平洋资料不全，不能据此判断没有活动气旋。<a href="https://www.nhc.noaa.gov/cyclones/" target="_blank" rel="noopener noreferrer">查看 NHC 官方活动气旋公告 ↗</a></p>':'';
     if (!storms.length) {
-      box.innerHTML = '<div class="empty"><strong>' + (state.stormQuality?.complete ? '当前数据覆盖洋区未返回活动台风' : '台风数据不足，当前活动状态未知') + '</strong><br>' + escapeCityText(state.source || '') + '<br>' + escapeCityText((state.stormQuality?.notes||[]).join('；')) + '</div>';
+      box.innerHTML = '<div class="empty"><strong>' + (state.stormQuality?.complete ? '当前数据覆盖洋区未返回活动台风' : '台风数据不足，当前活动状态未知') + '</strong><br>' + escapeCityText(state.source || '') + '<br>' + escapeCityText((state.stormQuality?.notes||[]).join('；')) + nhcNotice + '</div>';
       syncStormHud();
       return;
     }
@@ -3559,7 +3562,7 @@ body.loop-still .pill.bad {
         '</div></div><div class="storm-right"><div class="w">' + wind + (s.windMs != null ? " · " + escapeCityText(String(s.windMs)) + " 米/秒" : "") +
         '</div><div class="d">' + (dist != null ? ("距" + escapeCityText((state.city && state.city.name) || "上海") + " " + dist + " 公里") : "") + "</div></div></div>" +
         (active ? stormDetailHtml(s) : "") + "</div>";
-    }).join("") + '<div class="empty" style="margin:8px">数据：' + escapeCityText(state.source) + (state.snapUpdated ? " · 快照文件时间：" + window.StormQuality.utcLabel(state.snapUpdated) : "") + "</div>";
+    }).join("") + '<div class="empty" style="margin:8px">数据：' + escapeCityText(state.source) + (state.snapUpdated ? " · 快照文件时间：" + window.StormQuality.utcLabel(state.snapUpdated) : "") + nhcNotice + "</div>";
     box.querySelectorAll(".storm-card").forEach(function (el) {
       el.addEventListener("click", function () {
         const s = state.storms.find(function (x) { return x.id === el.getAttribute("data-id"); });
