@@ -2600,9 +2600,10 @@ body.loop-still .pill.bad {
     const m = /T(\d{2}):/.exec(String(iso || ''));
     return m ? m[1] + '时' : '—';
   }
-  function dayName(iso, idx) {
-    if (iso === dateKeyOffset(0)) return "今天";
-    if (iso === dateKeyOffset(1)) return "明天";
+  function dayName(iso, idx, today = dateKeyOffset(0), tomorrow = dateKeyOffset(1)) {
+    if (!today) return String(iso).slice(5);
+    if (iso === today) return "今天";
+    if (iso === tomorrow) return "明天";
     return WEEK[new Date(iso + 'T12:00:00Z').getUTCDay()];
   }
   async function loadWeather() {
@@ -2703,22 +2704,24 @@ body.loop-still .pill.bad {
     renderAlerts();
   }
   function ensureCityHistory() {
-    if (!$('trendPanel').open || !state.weather || !state.city) return;
-    const key = wxCacheId(state.city), zone = state.weather.timezone || '';
+    if (!$('trendPanel').open || !state.city) return;
+    const key = wxCacheId(state.city), zone = state.weather?.timezone || state.city.timezone || '';
     // A user's explicit query has priority over a background weather refresh.
     if (state.historyRange?.custom && state.historyCityKey === key) return;
-    if (state.historyStatus === 'idle' || state.historyCityKey !== key || state.historyZone !== zone) loadHistory();
+    if (!state.historyStatus || state.historyStatus === 'idle' || state.historyCityKey !== key || state.historyZone !== zone) loadHistory();
   }
   function dateKeyOffset(offset) {
     const d = new Date(Date.now());
-    const zone = state.weather && state.weather.timezone;
-    try {
-      const parts = new Intl.DateTimeFormat("en-US", { timeZone: zone || undefined, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d);
-      const values = {};
-      parts.forEach(function (part) { values[part.type] = part.value; });
-      if (values.year && values.month && values.day) return new Date(Date.UTC(+values.year,+values.month-1,+values.day+offset)).toISOString().slice(0,10);
-    } catch (e) {}
-    return new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()+offset)).toISOString().slice(0,10);
+    for (const zone of [state.weather?.timezone, state.city?.timezone]) {
+      if (typeof zone !== 'string' || !zone.trim()) continue;
+      try {
+        const parts = new Intl.DateTimeFormat("en-US", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d);
+        const values = {};
+        parts.forEach(function (part) { values[part.type] = part.value; });
+        if (values.year && values.month && values.day) return new Date(Date.UTC(+values.year,+values.month-1,+values.day+offset)).toISOString().slice(0,10);
+      } catch (_) { /* Try city-search metadata before reporting unknown. */ }
+    }
+    return '';
   }
   function historyValue(arr, i, fallback) {
     return arr && Number.isFinite(arr[i]) ? arr[i] : null;
@@ -2731,7 +2734,7 @@ body.loop-still .pill.bad {
     if (!c) return;
     const city = wxCacheId(c);
     state.historyCityKey = city;
-    state.historyZone = state.weather && state.weather.timezone || '';
+    state.historyZone = state.weather?.timezone || c.timezone || '';
     state.history = null;
     state.historyStatus = 'loading';
     state.historyRange = { start, end, startTime: startTime || '00:00', endTime: endTime || '23:00', custom: !!custom };
@@ -2762,15 +2765,18 @@ body.loop-still .pill.bad {
     if ($("historyEndTime")) $("historyEndTime").value = "23:00";
   }
   function loadHistory() {
-    if (!state.weather) return;
+    if (!state.city) return;
     const start = dateKeyOffset(-7), end = dateKeyOffset(-1);
+    if (!start || !end) { $('trendNote').textContent = '所选地点时区尚未确认，暂不能计算近 7 天。'; return; }
     state.historyCityKey = state.city ? wxCacheId(state.city) : "";
-    state.historyZone = state.weather && state.weather.timezone || "";
+    state.historyZone = state.weather?.timezone || state.city.timezone || "";
     setHistoryInputs(start, end);
     return loadHistoryRange(start, end);
   }
   function syncHistoryControls() {
     const hourly = state.trendGranularity === 'hourly';
+    const yesterday = dateKeyOffset(-1);
+    ['historyStart','historyEnd'].forEach(id => { if ($(id)) $(id).max = yesterday; });
     ['historyStartTime', 'historyEndTime'].forEach(id => { if ($(id)) $(id).hidden = !hourly; });
   }
   function queryHistory() {
@@ -2778,8 +2784,10 @@ body.loop-still .pill.bad {
     const hourly = state.trendGranularity === 'hourly';
     const startTime = hourly ? ($('historyStartTime').value || '00:00') : '00:00';
     const endTime = hourly ? ($('historyEndTime').value || '23:00') : '23:00';
-    if (!start || !end || start > end || (hourly && start === end && startTime > endTime) || end >= dateKeyOffset(0)) {
-      $('trendNote').textContent = '请选择不晚于昨天的有效日期和时间段';
+    const today = dateKeyOffset(0);
+    if (!today) { $('trendNote').textContent = '所选地点时区尚未确认，请等待天气更新后再查询。'; return; }
+    if (!start || !end || start > end || (hourly && start === end && startTime > endTime) || end >= today) {
+      $('trendNote').textContent = '请选择不晚于昨天的有效日期和时间段（以所选地点当地时间为准）';
       return;
     }
     const count = (Date.parse(end+'T00:00:00Z') - Date.parse(start+'T00:00:00Z')) / 86400000 + 1;
@@ -3251,14 +3259,15 @@ body.loop-still .pill.bad {
     const weekMax = maxs.length ? Math.max.apply(null, maxs) : 1;
     const span = Math.max(1, weekMax - weekMin);
     let dh = "";
+    const firstCityDay = dateKeyOffset(0), nextCityDay = dateKeyOffset(1);
     (d.time || []).forEach(function (iso, i) {
-      if (iso < dateKeyOffset(0)) return;
+      if (firstCityDay && iso < firstCityDay) return;
       const tmin = historyValue(d.temperature_2m_min,i), tmax = historyValue(d.temperature_2m_max,i);
       const left = tmin == null ? 0 : ((tmin - weekMin) / span) * 100;
       const width = (tmin == null || tmax == null) ? 0 : ((tmax - tmin) / span) * 100;
       const popd = (d.precipitation_probability_max || [])[i];
       const uv = (d.uv_index_max || [])[i];
-      dh += '<div class="day"><div class="name">' + dayName(iso, i) + '</div><div class="g">' +
+      dh += '<div class="day"><div class="name">' + dayName(iso, i, firstCityDay, nextCityDay) + '</div><div class="g">' +
         wxIcon(historyValue(d.weather_code,i), true, 20) + '</div><div class="desc">' + wxPhrase(historyValue(d.weather_code,i), true) +
         (uv >= 8 ? '<span class="uv-badge">UV ' + Math.round(uv) + "</span>" : "") +
         '</div><div class="pop">' + (popd != null ? popd + "%" : "") + '</div><div class="tbar-wrap"><span class="lo">' +
@@ -3570,7 +3579,8 @@ body.loop-still .pill.bad {
       const gust = cur.wind_gusts_10m || 0;
       const vmax = Math.max(cur.wind_speed_10m || 0, gust, (daily.wind_speed_10m_max || [])[0] || 0);
       if (vmax >= 17.2) items.push({ cls: "gale", title: "大风", body: "风力约 " + Math.round(vmax) + " 米/秒，" + windLevel(vmax) + " 级。", level: vmax >= 24.5 ? "警告" : "关注", lvCls: vmax >= 24.5 ? "bad" : "warn", when: "今天", advice: "注意高空坠物，减少户外停留" });
-      const cold=(daily.time||[]).map((date,i)=>({date,temp:(daily.temperature_2m_min||[])[i]})).filter(r=>Number.isFinite(r.temp)&&r.temp<=0&&r.date>=dateKeyOffset(0));
+      const riskDay=dateKeyOffset(0);
+      const cold=(daily.time||[]).map((date,i)=>({date,temp:(daily.temperature_2m_min||[])[i]})).filter(r=>riskDay&&Number.isFinite(r.temp)&&r.temp<=0&&r.date>=riskDay);
       if (cold.length) items.push({ cls: "", title: '低温趋势', body: cold[0].date + ' 最低气温可能约 ' + Math.round(cold[0].temp) + '°；低温不直接等于道路结冰。', level: '模型参考', lvCls: 'warn', when: cold[0].date, advice: '远期存在不确定性，临近日期请再确认' });
       let fog = cur.weather_code === 45 || cur.weather_code === 48;
       if (!fog && hourly.weather_code) {
@@ -4463,7 +4473,13 @@ body.loop-still .pill.bad {
     } catch (e) {}
   }
   function clearRoute(cancelPending) {
-    if (cancelPending) state.routeRequest++;
+    if (cancelPending) {
+      state.routeRequest++;
+      state.routeAbort?.abort();
+      state.routeAbort = null;
+      const button = $('routeSearch');
+      if (button) { button.disabled = false; button.textContent = '查询路线天气'; }
+    }
     if (state.routeLayer && state.satMap) state.satMap.removeLayer(state.routeLayer);
     if (state.routeWeatherLayer && state.satMap) state.satMap.removeLayer(state.routeWeatherLayer);
     state.routeLayer = null; state.routeWeatherLayer = null; state.route = null;
@@ -4493,11 +4509,11 @@ body.loop-still .pill.bad {
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
     return { lat: lat, lon: lon, name: "地图点 " + lat.toFixed(4) + ", " + lon.toFixed(4), admin: "" };
   }
-  async function geocodeRoutePoint(text) {
+  async function geocodeRoutePoint(text, signal) {
     if (!text) return null;
     const coordinate = routeCoordinate(text);
     if (coordinate) return coordinate;
-    return window.RouteWeather.geocode(text, getJson);
+    return window.RouteWeather.geocode(text, (url,opts) => getJson(url,{...opts,signal}));
   }
   function routeSamples(route, count) {
     return window.RouteWeather.samples(route, count || 12);
@@ -4505,11 +4521,15 @@ body.loop-still .pill.bad {
   function routeWeatherColor(row) {
     return window.RouteWeather.color(row);
   }
-  async function loadRouteWeather(samples, when, requestId) {
+  async function loadRouteWeather(samples, when, requestId, signal) {
     const lats = samples.map(s => s.point[1]).join(',');
     const lons = samples.map(s => s.point[0]).join(',');
-    const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lats + "&longitude=" + lons + "&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m&forecast_days=16&timezone=auto&timeformat=unixtime&wind_speed_unit=ms";
-    const data = await getJson(url);
+    // Each sample starts its forecast on its own local calendar day.
+    // Include the arrival's next hourly frame even for near-midnight departures.
+    const horizonMs = Math.max(0, when - Date.now() + Math.max(0, ...samples.map(s => s.elapsedSeconds)) * 1000);
+    const days = Math.min(16, 2 + Math.floor((horizonMs + 3 * 3600000) / 86400000));
+    const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lats + "&longitude=" + lons + "&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m&forecast_days=" + days + "&timezone=auto&timeformat=unixtime&wind_speed_unit=ms";
+    const data = await getJson(url,{signal});
     if (requestId !== state.routeRequest) return [];
     const arr = Array.isArray(data) ? data : [data];
     return samples.map(function (sample, n) {
@@ -4537,17 +4557,19 @@ body.loop-still .pill.bad {
     const fold = $("routeFold").value;
     if (!fromText || !toText) { if (status) status.textContent = "请填写起点和终点，或打开路线模式在地图上依次点击两处。"; return; }
     const requestId = ++state.routeRequest;
+    const controller = state.routeAbort = new AbortController();
+    const signal = controller.signal;
     clearRoute(false);
     searchButton.disabled = true;
     searchButton.textContent = '查询中…';
     let stage = '起点搜索';
     if (status) status.textContent = "正在搜索起点…";
     try {
-      const from = fromText ? await geocodeRoutePoint(fromText) : (state.city ? { lat: state.city.lat, lon: state.city.lon, name: state.city.name } : null);
+      const from = await geocodeRoutePoint(fromText, signal);
       if (requestId !== state.routeRequest) return;
       stage = '终点搜索';
       status.textContent = '已识别起点：' + from.name + ' · ' + (from.admin || '') + '；正在搜索终点…';
-      const to = toText ? await geocodeRoutePoint(toText) : null;
+      const to = await geocodeRoutePoint(toText, signal);
       if (requestId !== state.routeRequest) return;
       if (!from || !to) throw new Error("地点未找到");
       stage = '出发地时区查询';
@@ -4555,7 +4577,7 @@ body.loop-still .pill.bad {
       // "Now" is an absolute instant. A station without zone metadata should
       // not require a separate forecast request before roads can be shown.
       if (enteredTime && !from.timezone) {
-        const zoneData = await getJson('https://api.open-meteo.com/v1/forecast?latitude=' + from.lat + '&longitude=' + from.lon + '&timezone=auto&current=temperature_2m&forecast_days=1');
+        const zoneData = await getJson('https://api.open-meteo.com/v1/forecast?latitude=' + from.lat + '&longitude=' + from.lon + '&timezone=auto&current=temperature_2m&forecast_days=1',{signal});
         from.timezone = zoneData.timezone;
       }
       if (requestId !== state.routeRequest) return;
@@ -4566,13 +4588,15 @@ body.loop-still .pill.bad {
       if (when < Date.now()-60000) { status.textContent = '请使用当前或未来的出发时间；路线天气不支持历史出行。'; return; }
       stage = '地图加载';
       await ensureSatMap();
+      if (signal.aborted) return;
       await setSatView("2d");
+      if (signal.aborted) return;
       if (state.satLayer !== "city") await setSatBase("city");
       if (requestId !== state.routeRequest) return;
       const routeUrl = OSRM_URL + from.lon + "," + from.lat + ";" + to.lon + "," + to.lat + "?alternatives=false&overview=full&geometries=geojson&steps=false&annotations=duration,distance";
       stage = '道路规划';
       status.textContent = '地点已识别，正在规划驾车路线（不是列车线路）…';
-      const data = await getJson(routeUrl);
+      const data = await getJson(routeUrl,{signal});
       const route = data && data.routes && data.routes[0];
       if (!route || !route.geometry || !route.geometry.coordinates) throw new Error("路线暂不可用");
       if (requestId !== state.routeRequest) return;
@@ -4591,7 +4615,7 @@ body.loop-still .pill.bad {
       status.textContent = '驾车路线已找到，正在读取沿途预计到达时天气…';
       let weather;
       let weatherFailed = false;
-      try { weather = await loadRouteWeather(samples, when, requestId); }
+      try { weather = await loadRouteWeather(samples, when, requestId, signal); }
       catch (_) {
         weatherFailed = true;
         weather = samples.map(s => Object.assign({point:s.point,arrival:when+s.elapsedSeconds*1000,etaMethod:s.etaMethod},window.RouteWeather.weather({},when,weatherMs),{reason:'天气服务暂不可用，请稍后重新查询'}));
@@ -4615,10 +4639,13 @@ body.loop-still .pill.bad {
         '<br>' + escapeCityText(samples[0].etaMethod) + ' · 灰色：数据不足；绿色仅表示未触发所设阈值，不保证道路安全。' +
         '<div class="route-weather">' + weather.map((w,i)=>'<details class="route-weather-chip"><summary><i style="width:8px;height:8px;border-radius:50%;background:' + routeWeatherColor(w) + ';display:inline-block"></i>路线点 ' + (i+1) + ' · ' + (w.complete ? '查看到达时天气' : escapeCityText(w.reason)) + '</summary>' + routeWeatherDescription(w) + '</details>').join('') + '</div>';
     } catch (e) {
-      if (requestId === state.routeRequest && status) status.textContent = stage + '失败：' + (e.userMessage || (stage === '道路规划' ? '道路服务暂不可达或没有连通的驾车道路，请稍后重试；这不代表地点名称错误。' : '服务暂时不可用，请稍后重试。')) + '（路线版 31.56）';
+      if (requestId === state.routeRequest && status) status.textContent = stage + '失败：' + (e.userMessage || (stage === '道路规划' ? '道路服务暂不可达或没有连通的驾车道路，请稍后重试；这不代表地点名称错误。' : '服务暂时不可用，请稍后重试。')) + '（路线版 31.63）';
     } finally {
-      searchButton.disabled = false;
-      searchButton.textContent = '查询路线天气';
+      if (requestId === state.routeRequest) {
+        state.routeAbort = null;
+        searchButton.disabled = false;
+        searchButton.textContent = '查询路线天气';
+      }
     }
   }
   function routeTimeDefault() {
@@ -6149,9 +6176,11 @@ body.loop-still .pill.bad {
       renderTrendChart();
     });
     $('trendPanel').addEventListener('toggle',function(){
-      if(this.open && state.weather && (!state.historyStatus || state.historyStatus==='idle'))loadHistory();
+      if(this.open)syncHistoryControls();
+      if(this.open)ensureCityHistory();
     });
     syncHistoryControls();
+    ['historyStart','historyEnd'].forEach(id=>$(id).addEventListener('focus',syncHistoryControls));
     observeTrendSize();
     observeMapControls();
     const refreshBtn = $("refreshBtn");
