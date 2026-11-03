@@ -1426,7 +1426,7 @@ body.loop-still .pill.bad {
 .sat-city-icon { pointer-events:auto; }
 .sat-my-city-lab { background:rgba(8,15,26,.88); border:1px solid rgba(126,197,255,.7); color:#dceeff; padding:4px 7px; border-radius:999px; white-space:nowrap; font-size:11px; box-shadow:0 0 0 5px rgba(78,162,255,.14), 0 3px 12px rgba(0,0,0,.28); transform:translate(-50%,-30px); }
 .sat-city-pill { box-shadow:0 2px 10px rgba(0,0,0,.22); }
-.sat-wind-barb.wind-flow { animation: windFlow 1.7s ease-in-out infinite; }
+.sat-wind-barb svg { display:block; overflow:visible; filter:drop-shadow(0 1px 1px #132333); animation: windFlow var(--flow-period,1.7s) linear infinite; }
 .wind-gust { stroke:#ffd166; stroke-dasharray:2 2; }
 .insight-card { margin:14px 0; padding:16px; border:1px solid var(--line); border-radius:18px; background:rgba(14,24,39,.88); }
 .insight-card h3 { margin:0 0 10px; font-size:15px; }
@@ -1456,13 +1456,13 @@ body.loop-still .pill.bad {
 .favorite-row { display:flex; align-items:center; gap:7px; margin:6px 0; }
 .favorite-row .recent-row { flex:1; margin:0; }
 .favorite-toggle { flex:none; min-width:36px; min-height:36px; border:1px solid var(--line); border-radius:10px; background:rgba(255,255,255,.06); color:#ffd166; font-size:18px; cursor:pointer; }
-@keyframes windFlow { 0%,100% { transform: translateY(2px) rotate(var(--wind-rot,0deg)); opacity:.62; } 50% { transform: translateY(-2px) rotate(var(--wind-rot,0deg)); opacity:1; } }
+@keyframes windFlow { 0% { transform:translateY(2px);opacity:.85 } 60% { opacity:1 } 100% { transform:translateY(-2px);opacity:.85 } }
 .sat-legend-body .lg-rain { display:inline-block; width:22px; height:8px; border-radius:4px; margin-right:5px; background:linear-gradient(90deg,#7dd3fc,#0ea5e9,#7c3aed); }
 .sat-legend-body .lg-city { display:inline-block; width:9px; height:9px; border-radius:50%; background:#4ea2ff; border:2px solid white; margin-right:8px; }
 @media (max-width: 480px) { .trend-head { display:block; } .trend-tabs { margin-top:10px; width:max-content; } .trend-chart svg { height:190px; } .trend-chart { min-height:190px; } .next2-grid { grid-template-columns:repeat(3, minmax(0, 1fr)); } .history-tools input, .history-tools select { max-width:118px; } }
 @media (max-width: 480px) { .sat-route-fab { left:64px; } .sat-route-panel { bottom:136px; } }
 @media (max-width: 480px) { .hero::before { background-position: 68% center; } }
-@media (prefers-reduced-motion: reduce) { .clothing-person, .clothing-umbrella, .clothing-rain, .sat-wind-barb.wind-flow { animation:none !important; } }
+@media (prefers-reduced-motion: reduce) { .clothing-person, .clothing-umbrella, .clothing-rain, .sat-wind-barb svg { animation:none !important; } }
 </style>
 <link rel="stylesheet" href="assets/ui-clean.css?v=31.76">
 </head>
@@ -1782,6 +1782,7 @@ body.loop-still .pill.bad {
             <div><i class="lg-r10"></i>风圈 10级</div>
             <div><i class="lg-r12"></i>风圈 12级</div>
             <div><i class="lg-dash"></i>虚线＝预报</div>
+            <div>风箭头指向吹去方向；越长、移动越快表示风速越大。静风或风向缺测时不画箭头。</div>
             <div><i class="lg-cone"></i>锥＝不确定范围</div>
             <div><i class="lg-rain"></i>降雨颜色＝预报雨量 mm</div>
             <div><i class="lg-city"></i>蓝色光圈＝所选城市（始终置顶）</div>
@@ -1827,7 +1828,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">31.96</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">31.97</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -4149,8 +4150,9 @@ body.loop-still .pill.bad {
     const wx = c.wx || {};
     if (ov("wind") && !ov("temp")) {
       const ms = wx.wind_speed_10m;
-      if (ms == null) return "—";
-      return windLevel(ms) + "级 " + dirFromDeg(wx.wind_direction_10m);
+      const wind=mapWindReading(ms,wx.wind_direction_10m);
+      if (!wind) return "—";
+      return wind.calm?'静风':windLevel(ms)+'级 '+(wind.to===null?'风向未知':dirFromDeg(wx.wind_direction_10m)+'风');
     }
     if (ov("humidity") && !ov("temp")) {
       return wx.relative_humidity_2m == null ? "—" : Math.round(wx.relative_humidity_2m) + "%";
@@ -4228,6 +4230,12 @@ body.loop-still .pill.bad {
       state.satCityMark.addTo(state.satMap);
     }
   }
+  function mapWindReading(speed,from){
+    if(!Number.isFinite(speed)||speed<0)return null;
+    const calm=speed<0.3;
+    const directed=!calm&&Number.isFinite(from)&&from>=0&&from<=360;
+    return {calm,to:directed?(from+180)%360:null,period:Math.max(.65,2.4/(1+speed/12))};
+  }
   function updateWindPill() {
     const elN = $("satWindNum");
     const elD = $("satWindDir");
@@ -4237,18 +4245,19 @@ body.loop-still .pill.bad {
     const wx = weather && !insights.freshness(weather).stale ? weather.current : null;
     const pill = $('satWind');
     if (pill) pill.title = '所选城市当前风况（不随地图时间轴变化）；点击定位城市';
-    if (!wx || wx.wind_speed_10m == null || !Number.isFinite(Number(wx.wind_speed_10m))) {
+    const wind=wx && mapWindReading(wx.wind_speed_10m,wx.wind_direction_10m);
+    if (!wind) {
       elN.textContent = "—";
       if (elD) elD.textContent = "当前风况未知";
       if (elA) elA.style.visibility = 'hidden';
       return;
     }
     elN.textContent = String(Math.round(wx.wind_speed_10m * 3.6));
-    const hasDirection = wx.wind_direction_10m != null && Number.isFinite(Number(wx.wind_direction_10m));
-    if (elD) elD.textContent = '当前 · ' + (hasDirection ? dirFromDeg(wx.wind_direction_10m) : '风向未知');
+    const hasDirection = wind.to!==null;
+    if (elD) elD.textContent = '当前 · ' + (wind.calm?'静风':hasDirection ? dirFromDeg(wx.wind_direction_10m)+'风' : '风向未知');
     if (elA) elA.style.visibility = hasDirection ? '' : 'hidden';
     if (elA && hasDirection) {
-      elA.style.transform = "rotate(" + ((wx.wind_direction_10m + 180) % 360) + "deg)";
+      elA.style.transform = "rotate(" + wind.to + "deg)";
     }
   }
   function cityFeature(c) {
@@ -5203,18 +5212,19 @@ body.loop-still .pill.bad {
     if (ov("wind")) {
       pts.forEach(function (pt) {
         const m = metAt(pt, unix, future);
-        if (m.ws == null) return;
+        const wind=mapWindReading(m.ws,m.wd);
+        if (!wind || wind.to===null) return;
         const zoomScale = Math.max(0.72, Math.min(1.55, 1 + (state.satMap.getZoom() - 5) * 0.12));
         const len = (16 + Math.min(18, m.ws * 0.78)) * zoomScale;
-        const op = 0.4 + Math.min(0.55, m.ws / 20);
-        const rot = ((m.wd == null ? 0 : m.wd) + 180) % 360;
+        const op = .85 + Math.min(.15, m.ws / 100);
+        const rot = wind.to;
         const stroke = windColor(m.ws);
         const gustMark = m.gust != null && m.gust > m.ws + 3 ? '<path class="wind-gust" d="M7 16h10" fill="none" stroke-width="1.4" stroke-linecap="round"/>' : "";
         const svg = '<div style="width:' + len + "px;height:" + len + "px;transform:rotate(" + rot +
-          "deg);opacity:" + op.toFixed(2) + '">' +
+          "deg);--flow-period:" + wind.period.toFixed(2) + "s;opacity:" + op.toFixed(2) + '">' +
           '<svg viewBox="0 0 24 24" width="' + len + '" height="' + len +
           '"><path d="M12 20V4M12 4l-4.8 6M12 4l4.8 6" fill="none" stroke="#e8f4ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
-        const ic = L.divIcon({ className: "sat-wind-barb wind-flow", html: svg.replace('stroke="#e8f4ff"', 'stroke="' + stroke + '"').replace('</svg>', gustMark + '</svg>'), iconSize: [len, len], iconAnchor: [len / 2, len / 2] });
+        const ic = L.divIcon({ className: "sat-wind-barb", html: svg.replace('stroke="#e8f4ff"', 'stroke="' + stroke + '"').replace('</svg>', gustMark + '</svg>'), iconSize: [len, len], iconAnchor: [len / 2, len / 2] });
         L.marker([pt.lat, pt.lon], { icon: ic, interactive: false, keyboard: false, pane: windPane }).addTo(g);
       });
     }
