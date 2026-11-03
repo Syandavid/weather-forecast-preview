@@ -172,7 +172,20 @@
       else if(temp<=-10){title='低温';detail='注意防寒防冻';}
       if(title)hits.push({...r,title,detail,level,tier:r.time<=now+48*HOUR?'near':r.time<=now+7*24*HOUR?'trend':'outlook'});
     }
-    hits.sort((a,b)=>a.time-b.time);
+    // The overview must not issue an all-clear when a valid sub-hourly
+    // thunderstorm or gust falls between two unremarkable hourly records.
+    const m=w.minutely_15||{};
+    for(let i=1;i<(m.time||[]).length;i++){
+      const begin=epoch(m.time[i-1],w),stop=epoch(m.time[i],w);
+      if(stop-begin!==900000||stop<=now||begin>=now+2*HOUR)continue;
+      const code=m.weather_code?.[i],gust=m.wind_gusts_10m?.[i],thunder=[95,96,99].includes(code);
+      if(!thunder&&!(finite(gust)&&gust>=17.2))continue;
+      const startMin=Math.max(0,Math.floor((begin-now)/60000)),endMin=Math.min(120,Math.ceil((stop-now)/60000));
+      hits.push({time:Math.max(begin,now),iso:m.time[i-1],windowLabel:startMin?'约'+startMin+'–'+endMin+'分钟后':'未来'+endMin+'分钟内',
+        title:thunder?(code===95?'雷暴':'雷暴伴冰雹'):(gust>=24.5?'强风':'大风'),detail:thunder?'可能出现雷电活动':'留意高空坠物',
+        level:thunder||gust>=24.5?'danger':'warn',tier:'near'});
+    }
+    hits.sort((a,b)=>a.time-b.time||Number(b.level==='danger')-Number(a.level==='danger'));
     return {status:complete?'available':'partial',complete,event:hits[0]||null,horizon:near.at(-1)?.iso||null};
   }
   function daylight(w, now=Date.now()) {
