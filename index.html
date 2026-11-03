@@ -1813,7 +1813,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">32.02</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">32.03</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -4545,15 +4545,10 @@ body.loop-still .pill.bad {
     const q='[out:json][timeout:10];('+parts.map(([w,e])=>'node[highway=traffic_signals]('+[south,w,north,e].map(x=>x.toFixed(5)).join(',')+');').join('')+');out 901;';
     const ctl=state.trafficAbort=new AbortController(),deadline=setTimeout(()=>ctl.abort(),12500);
     trafficStatus('正在读取当前视野的 OSM 信号灯位置…');
-    try {
-      const cacheHit=state.signalCache?.q===q && Date.now()-state.signalCache.at>=0 && Date.now()-state.signalCache.at<300000;
-      if(!cacheHit && Date.now()<state.signalRetryAt){trafficStatus('信号灯服务限流，请稍后查看 · 非实时灯色');return;}
-      const data=cacheHit?state.signalCache.data:await getOverpass(q,{signal:ctl.signal,timeoutMs:6000});
-      if(requestId!==state.trafficRequest||ctl.signal.aborted)return;
-      if(data?.remark||!Array.isArray(data?.elements))throw Error('Incomplete inventory');
-      const valid=data.elements.filter(n=>n?.type==='node'&&n.tags?.highway==='traffic_signals'&&Number.isFinite(n.lat)&&Math.abs(n.lat)<=90&&Number.isFinite(n.lon)&&Math.abs(n.lon)<=180);
-      if(valid.length!==data.elements.length)throw Error('Malformed traffic signal');
-      if(!cacheHit)state.signalCache={q,at:Date.now(),data};
+    const cached=state.signalCache, fresh=()=>cached && Date.now()>=cached.at && Date.now()-cached.at<300000;
+    const inside=n=>n.lat>=south&&n.lat<=north&&parts.some(([w,e])=>n.lon>=w-1e-9&&n.lon<=e+1e-9);
+    function paint(valid){
+      clearTrafficSignals();
       // Bound DOM work and avoid drawing a wall of icons at city zoom.
       const occupied=new Set(),nodes=[];
       const spacing=map.getZoom()<14?44:22;
@@ -4573,8 +4568,35 @@ body.loop-still .pill.bad {
         for(const n of nodes)L.marker([n.lat,n.lon],{icon,interactive:false,keyboard:false,pane:'signalPane'}).addTo(group);
         state.trafficLayer=group.addTo(map);
       }
-      trafficStatus(nodes.length?'显示 '+nodes.length+' 个 OSM 点位'+(valid.length>nodes.length?'（密集处仅显示部分，可放大）':'')+' · 非实时灯色':'本视野未返回 OSM 点位，不代表没有信号灯');
-    }catch(e){if(requestId===state.trafficRequest){if(e.httpStatus===429)state.signalRetryAt=Date.now()+60000;trafficStatus('信号灯资料暂不可用，不代表没有信号灯');}}
+      return nodes.length;
+    }
+    let retained=0;
+    try {
+      if(fresh()){
+        const filtered=cached.nodes.filter(inside);
+        const contained=south>=cached.south&&north<=cached.north&&parts.every(([w,e])=>cached.parts.some(([cw,ce])=>w>=cw-1e-9&&e<=ce+1e-9));
+        retained=paint(filtered);
+        if(cached.q===q || (contained&&!cached.capped)){
+          trafficStatus(retained?'显示 '+retained+' 个 OSM 点位 · 近期缓存'+(filtered.length>retained?'（密集处仅显示部分）':'')+' · 非实时灯色':'近期缓存中未返回点位，不代表没有信号灯');return;
+        }
+        if(retained)trafficStatus('先显示 '+retained+' 个缓存点位，正在补查当前视野 · 非实时灯色');
+      }
+      if(Date.now()<state.signalRetryAt)throw Error('服务限流');
+      const data=await getOverpass(q,{signal:ctl.signal,timeoutMs:6000});
+      if(requestId!==state.trafficRequest)return;
+      if(ctl.signal.aborted||data?.remark||!Array.isArray(data?.elements))throw Error('Incomplete inventory');
+      const valid=data.elements.filter(n=>n?.type==='node'&&n.tags?.highway==='traffic_signals'&&Number.isFinite(n.lat)&&Math.abs(n.lat)<=90&&Number.isFinite(n.lon)&&Math.abs(n.lon)<=180);
+      if(valid.length!==data.elements.length)throw Error('Malformed traffic signal');
+      const within=valid.filter(inside),count=paint(within);
+      state.signalCache={q,at:Date.now(),south,north,parts,nodes:within,capped:data.elements.length>=901};
+      trafficStatus(count?'显示 '+count+' 个 OSM 点位'+(within.length>count?'（密集处仅显示部分，可放大）':'')+' · 非实时灯色':'本视野未返回 OSM 点位，不代表没有信号灯');
+    }catch(e){if(requestId===state.trafficRequest){
+      // Camera-settle events can immediately repeat a failed request.
+      if(e.httpStatus===429)state.signalRetryAt=Date.now()+60000;
+      else if(e.httpStatus>=500&&e.httpStatus<=599)state.signalRetryAt=Date.now()+10000;
+      if(!fresh()){clearTrafficSignals();retained=0;}
+      trafficStatus(retained?'补查未成功，仅显示 '+retained+' 个近期缓存点位 · 覆盖不完整，非实时灯色':'信号灯资料暂不可用，不代表没有信号灯');
+    }}
     finally{clearTimeout(deadline);if(state.trafficAbort===ctl)state.trafficAbort=null;}
   }
   function setRoadOption(kind, on) {
