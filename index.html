@@ -1812,7 +1812,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">32.00</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">32.01</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -4704,8 +4704,8 @@ body.loop-still .pill.bad {
     if (state.satLayer !== 'city') await setSatBase('city');
     if (!current()) return false;
     state.routeLayer = L.layerGroup();
-    L.geoJSON(route.geometry, { style: { color: "#22d3ee", weight: 8, opacity: .25, lineCap: "round", lineJoin: "round" }, interactive: false }).addTo(state.routeLayer);
-    L.geoJSON(route.geometry, { style: { color: "#e0f2fe", weight: 3.2, opacity: .98, lineCap: "round", lineJoin: "round", dashArray: "1 8" }, interactive: false }).addTo(state.routeLayer);
+    L.geoJSON(route.geometry, { pane:"routePathPane",style: { color: "#183853", weight: 8, opacity: .9, lineCap: "round", lineJoin: "round" }, interactive: false }).addTo(state.routeLayer);
+    L.geoJSON(route.geometry, { pane:"routePathPane",style: { color: "#5de5ff", weight: 4, opacity: 1, lineCap: "round", lineJoin: "round" }, interactive: false }).addTo(state.routeLayer);
     const startIcon = L.divIcon({ className: "route-pin route-start", html: "起", iconSize: [24, 24], iconAnchor: [12, 12] });
     const endIcon = L.divIcon({ className: "route-pin route-end", html: "终", iconSize: [24, 24], iconAnchor: [12, 12] });
     L.marker([from.lat, from.lon], { icon: startIcon, interactive: false }).addTo(state.routeLayer);
@@ -4716,6 +4716,7 @@ body.loop-still .pill.bad {
   }
   function drawRouteWeatherPoints(requestId,weather) {
     if(requestId!==state.routeRequest || state.tab!=='sat' || state.satView!=='2d' || !state.satMap || !state.routeLayer)return false;
+    if(state.routeWeatherLayer)state.satMap.removeLayer(state.routeWeatherLayer);
     state.routeWeatherLayer = L.layerGroup();
     const markers=[];
     weather.forEach(function (w, i) {
@@ -4803,6 +4804,11 @@ body.loop-still .pill.bad {
         weather = samples.map(s => Object.assign({point:s.point,arrival:when+s.elapsedSeconds*1000,etaMethod:s.etaMethod},window.RouteWeather.weather({},when,weatherMs),{reason:'天气服务暂不可用，请稍后重新查询'}));
       }
       if (requestId !== state.routeRequest) return;
+      const checked=Date.now();
+      let displayVersion=0;
+      function displayWeather(){
+      const version=++displayVersion;
+      const open=new Set(Array.from(status.querySelectorAll?.('.route-weather-chip')||[]).flatMap((el,i)=>el.open?[i]:[]));
       if (!from.timezone && weather[0]?.timezone) from.timezone = weather[0].timezone;
       $('routeZone').textContent = (from.timezone ? '出发地时区：' + from.timezone : '出发地时区未知，出发时间以 UTC 显示') + ' · 行程耗时不包含实时拥堵';
       const completeCount=weather.filter(w=>w.complete).length;
@@ -4815,10 +4821,43 @@ body.loop-still .pill.bad {
         '<div class="route-weather">' + weather.map((w,i)=>'<details class="route-weather-chip"><summary><i style="width:8px;height:8px;border-radius:50%;background:' + routeWeatherColor(w) + ';display:inline-block"></i>路线点 ' + (i+1) + ' · ' + (w.complete ? '查看到达时天气' : escapeCityText(w.reason)) + '</summary>' + routeWeatherDescription(w) + '<br><button type="button" class="route-point-focus" hidden data-route-point="'+i+'">在地图查看路线点 '+(i+1)+'</button></details>').join('') + '</div>';
       // Map rendering is optional. A slow CDN, failed tile engine or stale
       // callback must never hide a usable itinerary or lock the query form.
-      roadDrawn.then(drawn=>drawn && drawRouteWeatherPoints(requestId,weather)).catch(()=>false).then(drawn=>{
+      Array.from(status.querySelectorAll?.('.route-weather-chip')||[]).forEach((el,i)=>{if(open.has(i))el.open=true;});
+      if(completeCount<weather.length && status.insertAdjacentHTML){
+        status.insertAdjacentHTML('beforeend','<button type="button" class="route-point-focus" data-route-retry>只重试缺少天气的路线点</button><span role="status" data-retry-note></span>');
+        const retry=status.querySelector('[data-route-retry]'),note=status.querySelector('[data-retry-note]');
+        retry.onclick=async()=>{
+          if(requestId!==state.routeRequest||version!==displayVersion||retry.disabled)return;
+          if(Date.now()-checked>=600000||Date.now()<checked){retry.disabled=true;note.textContent=' 查询已超过有效期，请重新查询路线天气。';return;}
+          const missing=samples.map((s,i)=>i).filter(i=>!weather[i].complete);
+          const ctl=state.routeAbort=new AbortController();
+          retry.disabled=true;searchButton.disabled=true;note.textContent=' 正在补查 '+missing.length+' 个路线点；原路线和出发时间不变。';
+          try{
+            const fresh=await loadRouteWeather(missing.map(i=>samples[i]),when,requestId,ctl.signal);
+            if(requestId!==state.routeRequest)return;
+            const fields=['temp','code','pop','mm','wind','gust'];
+            let updated=false;
+            missing.forEach((idx,j)=>{
+              const row=fresh[j],old=weather[idx];
+              // Never stitch different model responses into an apparently
+              // complete forecast, or discard a known hazard for a missing value.
+              if(row?.complete || (row?.available && fields.some(k=>Number.isFinite(row[k])) &&
+                 fields.every(k=>!Number.isFinite(old[k])||Number.isFinite(row[k])))){
+                weather[idx]=row;updated=true;
+              }
+            });
+            if(!updated){note.textContent=' 仍未取得更完整的预报，保留已有结果。';return;}
+            weatherFailed=false;displayWeather();
+            (status.querySelector('[data-route-retry]')||status.querySelector('.route-weather-chip summary'))?.focus?.({preventScroll:true});
+          }catch(_){if(requestId===state.routeRequest)note.textContent=' 天气补查失败，保留已有结果；无需重输站名。';}
+          finally{if(requestId===state.routeRequest){retry.disabled=false;searchButton.disabled=false;state.routeAbort=null;}}
+        };
+      }
+      roadDrawn.then(drawn=>drawn && version===displayVersion && drawRouteWeatherPoints(requestId,weather)).catch(()=>false).then(drawn=>{
         const note=$('routeMapNote');
-        if(requestId===state.routeRequest && note)note.textContent=drawn?'路线与途经点已标在地图上。':'地图未就绪；可展开路线点，地图恢复后可重新查询以显示标注。';
+        if(requestId===state.routeRequest && version===displayVersion && note)note.textContent=drawn?'路线与途经点已标在地图上。':'地图未就绪；可展开路线点，地图恢复后可重新查询以显示标注。';
       });
+      }
+      displayWeather();
     } catch (e) {
       if (requestId === state.routeRequest && status) {
         let hint=e.userMessage || '服务暂时不可用，请稍后重试。';
@@ -4829,7 +4868,7 @@ body.loop-still .pill.bad {
           else if(e.name==='AbortError')hint='等待道路服务响应超时，请稍后重试，无需修改站名。';
           else hint='未取得有效的道路服务响应，请稍后重试，无需修改站名。';
         }
-        status.textContent=stage+'失败：'+hint+'（路线版 31.78）';
+        status.textContent=stage+'失败：'+hint+'（路线版 32.01）';
       }
     } finally {
       if (requestId === state.routeRequest) {
@@ -5459,6 +5498,7 @@ body.loop-still .pill.bad {
     pane("cityPane", 440, "none");
     pane("cityWeatherPane", 447, "none");
     pane("labelPane", 445, "none");
+    pane("routePathPane", 448, "none");
     pane("chinaRangePane", 456, "none");
     pane("tyFillPane", 450, "none");
     pane("tyLinePane", 460, "none");
