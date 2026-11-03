@@ -84,12 +84,17 @@
     const minute=w.minutely_15||{};
     const minutes=covers(minute,w,now,end) && rainTotal(minute,w,now,end,15)!==null ? 15 : 60;
     const source=minutes===15 ? minute : hourly;
-    if (!covers(source,w,now,end)) return {available:false,reason:'预报未覆盖未来两小时，暂无法判断风险'};
+    const fullWindow=covers(source,w,now,end);
+    let clock,slotZone=w.timezone||'UTC';
+    try{clock=new Intl.DateTimeFormat('en-GB',{timeZone:slotZone,hour:'2-digit',minute:'2-digit',hourCycle:'h23'});}
+    catch(_){slotZone='UTC';clock=new Intl.DateTimeFormat('en-GB',{timeZone:'UTC',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});}
+    const stops=(source.time||[]).map(t=>epoch(t,w));
     const rows=[10,15,30,60,90,120].map(offset => {
       const target=now+offset*60000;
-      return {offset, temp:sample(source,w,'temperature_2m',target,minutes),pop:sample(hourly,w,'precipitation_probability',target),mm:sample(source,w,'precipitation',target,minutes),code:sample(source,w,'weather_code',target,minutes),gust:sample(source,w,'wind_gusts_10m',target,minutes)};
+      const stop=stops.find(t=>t>=target),mm=sample(source,w,'precipitation',target,minutes);
+      return {offset,clock:clock.format(target),rainPeriod:finite(mm)&&finite(stop)?clock.format(stop-minutes*60000)+'–'+clock.format(stop):null,temp:sample(source,w,'temperature_2m',target,minutes),pop:sample(hourly,w,'precipitation_probability',target),mm,code:sample(source,w,'weather_code',target,minutes),gust:sample(source,w,'wind_gusts_10m',target,minutes)};
     });
-    const total=rainTotal(source,w,now,end,minutes);
+    const total=fullWindow?rainTotal(source,w,now,end,minutes):null;
     const values=(field)=>rows.map(r=>r[field]).filter(finite);
     const peak=field=>values(field).length ? Math.max(...values(field)) : null;
     // Include every source interval, so a brief storm between display slots
@@ -97,12 +102,14 @@
     const intervalRows=(source.time||[]).map((t,i)=>({time:epoch(t,w),code:(source.weather_code||[])[i],gust:(source.wind_gusts_10m||[])[i]})).filter(r=>r.time>now && r.time-minutes*60000<end);
     // A missing rain amount invalidates a rain sum, not an independent hazard signal.
     const extraHazards=[];
-    if(minutes===60)for(let i=1;i<(minute.time||[]).length;i++){
-      const stop=epoch(minute.time[i],w),begin=epoch(minute.time[i-1],w);
-      if(stop-begin!==900000||stop<=now||begin>=end)continue;
-      const code=minute.weather_code?.[i],gust=minute.wind_gusts_10m?.[i];
-      if([95,96,99].includes(code)||(finite(gust)&&gust>=17.2))
-        extraHazards.push({start:Math.max(0,(begin-now)/60000),end:Math.min(120,(stop-now)/60000),code,gust});
+    const alternate=minutes===60?minute:hourly,altMinutes=minutes===60?15:60;
+    for(let i=1;i<(alternate.time||[]).length;i++){
+      const stop=epoch(alternate.time[i],w),begin=epoch(alternate.time[i-1],w);
+      if(stop-begin!==altMinutes*60000||stop<=now||begin>=end)continue;
+      const code=alternate.weather_code?.[i],gust=alternate.wind_gusts_10m?.[i],amount=alternate.precipitation?.[i];
+      const rate=finite(amount)&&amount>=0?amount*60/altMinutes:null;
+      if([95,96,99,82,65].includes(code)||(finite(gust)&&gust>=17.2)||rate>=10)
+        extraHazards.push({start:Math.max(0,(begin-now)/60000),end:Math.min(120,(stop-now)/60000),code,gust,rate,minutes:altMinutes});
     }
     const storm=intervalRows.concat(extraHazards).some(r=>[95,96,99].includes(r.code));
     const gusts=intervalRows.map(r=>r.gust).filter(v=>finite(v)&&v>=0);
@@ -116,7 +123,15 @@
       const stop=epoch(t,w),start=stop-minutes*60000,mm=source.precipitation?.[i];
       return {start:Math.max(0,(start-now)/60000),end:Math.min(120,(stop-now)/60000),rate:finite(mm)&&mm>=0?mm*60/minutes:null,iso:t,code:source.weather_code?.[i],gust:source.wind_gusts_10m?.[i]};
     }).filter(r=>r.end>r.start&&r.end>0&&r.start<120);
-    return {available:true,rows,intervals,extraHazards,minutes,total,complete,storm,maxGust,popComplete,maxPop:pops.length?Math.max(...pops):null,maxMm:peak('mm')};
+    const heavy=intervals.concat(extraHazards).some(r=>r.rate>=10||[65,82].includes(r.code));
+    const signals=intervals.concat(extraHazards).map(r=>{
+      const kind=[95,96,99].includes(r.code)?'雷暴':r.gust>=17.2?'强阵风':r.rate>=10||[65,82].includes(r.code)?'较强降水':'';
+      return {...r,kind,step:r.minutes||minutes};
+    }).filter(r=>r.kind).sort((a,b)=>a.start-b.start||Number(b.kind==='雷暴')-Number(a.kind==='雷暴')||a.step-b.step);
+    const first=signals[0];
+    if(!fullWindow&&!first)return {available:false,reason:'预报未覆盖未来两小时，暂无法判断风险'};
+    const firstEvent=first?{kind:first.kind,step:first.step,windowLabel:first.start<1?'未来'+Math.ceil(first.end)+'分钟内':'约'+Math.floor(first.start)+'–'+Math.ceil(first.end)+'分钟后'}:null;
+    return {available:true,rows,slotZone,intervals,extraHazards,firstEvent,minutes,total,complete,storm,heavy,maxGust,popComplete,maxPop:pops.length?Math.max(...pops):null,maxMm:peak('mm')};
   }
   const activities={walk:{name:'散步',min:5,max:32,gust:12,uv:8},run:{name:'跑步',min:5,max:28,gust:10,uv:6},cycle:{name:'骑行',min:5,max:30,gust:8,uv:7}};
   function outdoor(w,activity='walk',now=Date.now()) {
@@ -179,11 +194,12 @@
       const begin=epoch(m.time[i-1],w),stop=epoch(m.time[i],w);
       if(stop-begin!==900000||stop<=now||begin>=now+2*HOUR)continue;
       const code=m.weather_code?.[i],gust=m.wind_gusts_10m?.[i],thunder=[95,96,99].includes(code);
-      if(!thunder&&!(finite(gust)&&gust>=17.2))continue;
+      const amount=m.precipitation?.[i],heavy=[65,82].includes(code)||(finite(amount)&&amount>=2.5);
+      if(!thunder&&!heavy&&!(finite(gust)&&gust>=17.2))continue;
       const startMin=Math.max(0,Math.floor((begin-now)/60000)),endMin=Math.min(120,Math.ceil((stop-now)/60000));
       hits.push({time:Math.max(begin,now),iso:m.time[i-1],windowLabel:startMin?'约'+startMin+'–'+endMin+'分钟后':'未来'+endMin+'分钟内',
-        title:thunder?(code===95?'雷暴':'雷暴伴冰雹'):(gust>=24.5?'强风':'大风'),detail:thunder?'可能出现雷电活动':'留意高空坠物',
-        level:thunder||gust>=24.5?'danger':'warn',tier:'near'});
+        title:thunder?(code===95?'雷暴':'雷暴伴冰雹'):heavy?'较强降水':(gust>=24.5?'强风':'大风'),detail:thunder?'可能出现雷电活动':heavy?'留意短时降水对出行的影响':'留意高空坠物',
+        level:thunder||heavy||gust>=24.5?'danger':'warn',tier:'near'});
     }
     hits.sort((a,b)=>a.time-b.time||Number(b.level==='danger')-Number(a.level==='danger'));
     return {status:complete?'available':'partial',complete,event:hits[0]||null,horizon:near.at(-1)?.iso||null};

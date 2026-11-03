@@ -1828,7 +1828,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">31.97</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">31.98</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -1844,7 +1844,7 @@ body.loop-still .pill.bad {
     <button class="chip" id="closeAbout" type="button">关闭</button>
   </div>
 </div>
-<script src="assets/weather-insights.js?v=31.85"></script>
+<script src="assets/weather-insights.js?v=31.98"></script>
 <script src="assets/route-weather.js?v=31.54"></script>
 <script src="assets/storm-quality.js?v=31.81"></script>
 <script src="assets/map-weather.js?v=27.1"></script>
@@ -3039,16 +3039,16 @@ body.loop-still .pill.bad {
       el.innerHTML = '<strong>未来 2 小时 · 暂无法判断</strong><p class="insight-note">' + data.reason + '</p>';
       return;
     }
-    const danger = data.storm || data.maxGust >= 17.2 || data.total >= 10;
+    const danger = data.storm || data.heavy || data.maxGust >= 17.2 || data.total >= 10;
     const warn = danger || !data.complete || !data.popComplete || data.maxPop >= 60 || data.total >= 2;
     el.className = "next2-card " + (danger ? "danger" : warn ? "warn" : "ok");
     const amount = v => v == null ? "未知" : (v > 0 && v < .1 ? "<0.1" : v.toFixed(1)) + " mm";
     const summary = data.storm ? "预报有雷暴风险，留意官方预警" : data.maxGust>=17.2 ? "预报阵风可达 "+Math.round(data.maxGust)+" m/s，留意当地预警" : !data.complete ? "部分数据缺失，暂不能排除风险" :
       "两小时累计降水约 " + amount(data.total) + (data.maxPop == null ? " · 降水概率未知" : " · " + (data.popComplete ? "最高降水概率 " : "已知时段最高降水概率 ") + Math.round(data.maxPop) + "%" + (data.popComplete ? "" : "（覆盖不完整）"));
-    const slots = data.rows.map(r => '<div class="next2-slot"><div class="at">+' + r.offset + '分钟</div><div class="ico">' +
+    const slots = data.rows.map(r => '<div class="next2-slot"><div class="at">+' + r.offset + '分钟 · '+r.clock+'</div><div class="ico">' +
       (r.code == null ? "—" : wxIcon(r.code, w.current.is_day === 1, 18)) +
       '</div><div class="deg">' + (r.temp == null ? "—" : Math.round(r.temp) + "°") +
-      '</div><div class="rain">时段量 ' + amount(r.mm) + '</div><div class="gust">阵风 ' +
+      '</div><div class="rain">时段量 ' + amount(r.mm) + (r.rainPeriod?'<br>'+r.rainPeriod:'')+'</div><div class="gust">阵风 ' +
       (r.gust == null ? "—" : Math.round(r.gust) + "m/s") + '</div></div>').join("");
     const expanded = !!el.querySelector('details[open]');
     const peakRate=Math.max(1,...data.intervals.filter(r=>r.rate!=null).map(r=>r.rate));
@@ -3061,10 +3061,11 @@ body.loop-still .pill.bad {
     el.innerHTML = '<div class="next2-head"><div class="next2-icon">' + (danger ? "!" : "雨") +
       '</div><div><strong>未来 2 小时 · ' + (danger ? "需要注意" : warn ? "留意变化" : "短临参考") +
       '</strong><span>' + summary + '</span></div></div>' + graph + '<details class="short-term-detail"' + (expanded ? ' open' : '') + '><summary>查看分时预报</summary><div class="next2-grid">' + slots +
-      '</div><small class="next2-source">Open-Meteo · ' + data.minutes + ' 分钟时段预报；每格雨量为对应时段量，累计量按时间重叠估算。15 分钟数据在部分地区由小时预报插值，不代表逐分钟实测。</small></details>';
+      '</div><small class="next2-source">时间：'+escapeCityText(data.slotZone)+' · Open-Meteo · ' + data.minutes + ' 分钟时段预报；同一时段的雨量不要重复相加。15 分钟数据在部分地区由小时预报插值，不代表逐分钟实测。</small></details>';
   }
   function shortOutlook(data) {
     if (!data.available) return '未来2小时：' + data.reason;
+    if(data.firstEvent){const e=data.firstEvent;return e.windowLabel+'可能有'+e.kind+(e.step===60&&data.minutes===15?'（小时预报）':'')+'，留意当地预警';}
     const windowLabel = r => {
       const start = Math.floor(r.start), end = Math.ceil(r.end);
       return start < 1 ? '未来' + end + '分钟内' : '约' + start + '–' + end + '分钟后';
@@ -3072,9 +3073,12 @@ body.loop-still .pill.bad {
     const signals=data.intervals.concat(data.extraHazards||[]).sort((a,b)=>a.start-b.start);
     const thunder = signals.find(r => [95,96,99].includes(r.code));
     const wind = signals.find(r => Number.isFinite(r.gust) && r.gust >= 17.2);
+    const heavy = signals.find(r => r.rate>=10 || [65,82].includes(r.code));
     const wet = data.intervals.find(r => r.rate > 0 || [51,53,55,56,57,61,63,65,66,67,71,73,75,77,80,81,82,85,86].includes(r.code));
-    if (thunder) return windowLabel(thunder) + '可能有雷暴，留意当地预警';
-    if (wind) return windowLabel(wind) + '可能有强阵风，留意当地预警';
+    const cadence=r=>r.minutes===60 && data.minutes===15?'（小时预报）':'';
+    if (thunder) return windowLabel(thunder) + '可能有雷暴'+cadence(thunder)+'，留意当地预警';
+    if (wind) return windowLabel(wind) + '可能有强阵风'+cadence(wind)+'，留意当地预警';
+    if (heavy) return windowLabel(heavy) + '可能有较强降水'+cadence(heavy)+'，留意出行条件';
     if (wet) return windowLabel(wet) + '可能有降水，出门备雨具';
     if (data.maxPop >= 40) return '未来2小时可能有降水，出门备雨具';
     if (!data.complete || !data.popComplete) return '未来2小时资料不全，暂不能排除降水';
@@ -3617,12 +3621,12 @@ body.loop-still .pill.bad {
       const daily = w.daily || {};
       const hourly = w.hourly || {};
       const near = insights.nextTwo(w);
-      if (near.available && (near.storm || near.total >= 2 || near.maxGust >= 17.2 || near.maxPop >= 60)) {
-        const severe = near.storm || near.total >= 10 || near.maxGust >= 17.2;
+      if (near.available && (near.storm || near.heavy || near.total >= 2 || near.maxGust >= 17.2 || near.maxPop >= 60)) {
+        const severe = near.storm || near.heavy || near.total >= 10 || near.maxGust >= 17.2;
         items.unshift({cls:"rain",title:"未来 2 小时重点",
-          body:(near.storm ? "可能出现雷暴 · " : "") + "累计降水 " + (near.total == null ? "未知" : near.total.toFixed(1)+" mm") +
+          body:(near.storm ? "可能出现雷暴 · " : near.heavy ? "可能有较强降水 · " : "") + "累计降水 " + (near.total == null ? "未知" : near.total.toFixed(1)+" mm") +
             " · 阵风 " + (near.maxGust == null ? "未知" : Math.round(near.maxGust)+" m/s"),
-          level:severe ? "警告" : "关注",lvCls:severe ? "bad" : "warn",when:"未来 2 小时",
+          level:severe ? "警告" : "关注",lvCls:severe ? "bad" : "warn",when:near.firstEvent?near.firstEvent.windowLabel+' · '+near.firstEvent.kind:"未来 2 小时",
           advice:"根据预报安排出行，留意当地官方预警"});
       }
       const riskDay=dateKeyOffset(0);
