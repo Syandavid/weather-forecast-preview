@@ -1715,6 +1715,8 @@ body.loop-still .pill.bad {
               <small>降低透明度可让城市与道路更清晰；不会篡改原始云图。</small>
             </div>
             <details class="sat-time-settings"><summary>时间与播放</summary>
+              <label>播放范围<select id="satLoopRange"><option value="all">全部：回看及未来 48 小时</option><option value="past">只看过去约 2 小时雷达</option><option value="next6">从现在看未来 6 小时</option></select></label>
+              <small>回看只播放已有雷达时次；未来云雨是模型预报，不是卫星照片。</small>
               <label>时间轴时区<select id="satClockMode"><option value="city">所选城市</option><option value="utc">世界时 UTC</option></select></label>
               <label>动画速度<select id="satLoopSpeed"><option value="1000">慢速</option><option value="550" selected>标准</option><option value="350">快速</option></select></label>
               <small>速度只改变播放节奏，不改变气象数据的更新频率。</small>
@@ -1829,7 +1831,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">31.91</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">31.94</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -1852,7 +1854,8 @@ body.loop-still .pill.bad {
 <script src="assets/pro-weather.js?v=28"></script>
 <script src="assets/city-search.js?v=31.32"></script>
 <script src="assets/road-overlay.js?v=31.32"></script>
-<script src="assets/vector-labels.js?v=31.34"></script>
+<script src="assets/label-locale.js?v=31.94"></script>
+<script src="assets/vector-labels.js?v=31.94.1"></script>
 <script>
 (function () {
   const themeQuery = window.matchMedia('(prefers-color-scheme: light)');
@@ -3853,8 +3856,9 @@ body.loop-still .pill.bad {
     const frames = [];
     const radar = state.radarFrames || [];
     const pastCut = now - 2 * 3600 - 8 * 60;
-    let past = radar.filter(function (f) { return f.time && f.time >= pastCut && f.time <= now + 180; });
-    if (past.length > 10) {
+    let past = radar.filter(function (f) { return f.time && f.time >= pastCut && f.time <= now; });
+    if (state.loopRange === 'next6') past = [];
+    if (past.length > 10 && state.loopRange !== 'past') {
       const keep = [];
       const step = Math.ceil(past.length / 8);
       for (let i = 0; i < past.length; i += step) keep.push(past[i]);
@@ -3866,7 +3870,8 @@ body.loop-still .pill.bad {
     });
     frames.push({ time: now, kind: "now" });
     const nextGridHour=(Math.floor(now/3600)+1)*3600;
-    for (let h = 0; h < 48; h++) {
+    const hours = state.loopRange === 'past' ? 0 : state.loopRange === 'next6' ? 6 : 48;
+    for (let h = 0; h < hours; h++) {
       const t = nextGridHour + h * 3600;
       frames.push({ time: t, kind: "forecast" });
     }
@@ -3880,6 +3885,8 @@ body.loop-still .pill.bad {
   function snapPlayheadToNow() {
     const frames = playFrames();
     if (!frames.length) { state.radarIdx = 0; return; }
+    const anchor = frames.findIndex(f => f.kind === 'now');
+    if (anchor >= 0) { state.radarIdx = anchor; return; }
     const now = Date.now() / 1000;
     let idx = 0, d = Infinity;
     for (let i = 0; i < frames.length; i++) {
@@ -3951,7 +3958,7 @@ body.loop-still .pill.bad {
     ticks.setAttribute('aria-valuemin', '0');
     ticks.setAttribute('aria-valuemax', String(n-1));
     ticks.setAttribute('aria-valuenow', String(idx));
-    const stamp = n + (state.fcUnavailable ? "-na" : "");
+    const stamp = n + ':' + (state.loopRange || 'all') + (state.fcUnavailable ? "-na" : "");
     if (ticks.getAttribute("data-n") !== stamp) {
       let html = "";
       for (let i = 0; i < n; i++) {
@@ -3978,6 +3985,8 @@ body.loop-still .pill.bad {
     const fr = frames[idx];
     const dt = fr && fr.time ? new Date(fr.time * 1000) : null;
     if (timeEl) timeEl.textContent = dt ? fmtPlayZh(dt, fr && fr.kind === "forecast") : "时间待定";
+    if (timeEl && fr.kind === 'radar') timeEl.textContent += ' · 回看';
+    if (timeEl && n === 1 && state.loopRange === 'past') timeEl.textContent += ' · 无历史雷达帧';
     const clock=mapClock(), zoneHint=state.mapClockMode==='utc'?'世界时 UTC':clock.fallback?'所选地点时区未知，使用 UTC':'所选城市时间：'+clock.tz;
     ticks.setAttribute('aria-valuetext', dt && timeEl ? timeEl.textContent + '（'+zoneHint+'）' : '时间未提供');
     if (timeEl) timeEl.title = zoneHint;
@@ -4260,10 +4269,7 @@ body.loop-still .pill.bad {
     map.getSource("selected-city").setData({ type: "FeatureCollection", features: [cityFeature(state.city || DEFAULT_CITY)] });
   }
   function placeTextExpression() {
-    const local = ["coalesce", ["get", "name:nonlatin"], ["get", "name"], ""];
-    const english = ["coalesce", ["get", "name_en"], ["get", "name:en"], ["get", "name:latin"], ["get", "name"], ""];
-    if (state.city && (state.city.labelLanguage === 'zh' || state.city.isChina)) return ["coalesce", ["get", "name:zh"], ["get", "name_zh"], local];
-    return ["case", ["all", ["!=", local, english], ["!=", local, ""]], ["concat", english, " · ", local], english];
+    return window.VectorLabels.text(state.city?.labelLanguage==='zh'||state.city?.isChina===true,state.city);
   }
   function sync3DPlaceLanguage(map) {
     map = map || state.sat3dMap;
@@ -4333,7 +4339,7 @@ body.loop-still .pill.bad {
     sync3DLabels();
   }
   function vectorLabelOptions() {
-    return {chinese:state.city?.labelLanguage === 'zh' || state.city?.isChina === true, density:state.labelDensity};
+    return {chinese:state.city?.labelLanguage === 'zh' || state.city?.isChina === true, focus:state.city,density:state.labelDensity};
   }
   function loadVectorBridge() {
     if (window.MaplibreGLLeaflet) return Promise.resolve();
@@ -6502,8 +6508,17 @@ body.loop-still .pill.bad {
     let prefs={};try{prefs=JSON.parse(localStorage.getItem(prefKey))||{};}catch(_){}
     state.mapClockMode=prefs.clock==='utc'?'utc':'city';
     state.playDelay=[350,550,1000].includes(prefs.delay)?prefs.delay:550;
+    const range=$('satLoopRange');
+    state.loopRange=['past','next6'].includes(prefs.range)?prefs.range:'all';
+    range.value=state.loopRange;
     clockMode.value=state.mapClockMode;loopSpeed.value=String(state.playDelay);
-    const savePlayback=()=>{try{localStorage.setItem(prefKey,JSON.stringify({clock:state.mapClockMode,delay:state.playDelay}));}catch(_){}};
+    const savePlayback=()=>{try{localStorage.setItem(prefKey,JSON.stringify({clock:state.mapClockMode,delay:state.playDelay,range:state.loopRange}));}catch(_){}};
+    range.addEventListener('change',()=>{
+      stopRadarLoop();state.loopRange=range.value;savePlayback();
+      buildTimeline();snapPlayheadToNow();
+      if(state.satMap){syncSatelliteTime();applySatOverlays();drawMetFields();}
+      updatePlayhead();
+    });
     clockMode.addEventListener('change',()=>{state.mapClockMode=clockMode.value==='utc'?'utc':'city';savePlayback();updatePlayhead();});
     loopSpeed.addEventListener('change',()=>{const delay=Number(loopSpeed.value);state.playDelay=[350,550,1000].includes(delay)?delay:550;savePlayback();
       if(state.radarPlaying&&!document.hidden&&state.tab==='sat'&&state.satView==='2d')schedulePlayTick(state.playDelay);

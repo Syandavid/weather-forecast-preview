@@ -1,12 +1,21 @@
 (function(root) {
   'use strict';
-  function text(chinese) {
+  function text() {
     const local=['coalesce',['get','name:nonlatin'],['get','name'],''];
-    const english=['coalesce',['get','name_en'],['get','name:en'],['get','name:latin'],['get','name'],''];
-    return chinese ? ['coalesce',['get','name:zh'],['get','name_zh'],local] :
-      ['case',['all',['!=',local,english],['!=',local,'']],['concat',english,' · ',local],english];
+    const english=['coalesce',['get','name:en'],['get','name_en'],local];
+    const bilingual=['case',['all',['!=',local,english],['!=',local,'']],['concat',english,' · ',local],english];
+    const zh=['coalesce',['get','name:zh-Hans'],['get','name:zh'],['get','name_zh'],local];
+    // Only infer a language when explicit locale metadata is missing.
+    // A selected weather city is not evidence about a distant feature.
+    const locale=root.WeatherLabelLocale;
+    // Some city anchors lie in estuaries outside generalized land polygons.
+    // Verified OpenMapTiles place id at 120.205536,30.248391 (Hangzhou).
+    // Match the local anchor and class/name, not renderer-dependent feature IDs.
+    const estuaryCity=['all',['==',['get','class'],'city'],['==',['get','name'],'杭州市'],['within',{type:'Polygon',coordinates:[[[120.18,30.22],[120.23,30.22],[120.23,30.28],[120.18,30.28],[120.18,30.22]]]}]];
+    const inferred=['any',estuaryCity,locale?['within',locale]:false];
+    return ['case',['match',['coalesce',['get','iso_a2'],['get','country_code'],''],['CN','HK','MO','TW'],true,'',inferred,false],zh,bilingual];
   }
-  function style({chinese=false,density='simple'}={}) {
+  function style({chinese=false,focus=null,density='simple'}={}) {
     const detailed=density==='detail', layers=[];
     // MapLibre zoom is Leaflet zoom - 1 in the official bridge.
     // Neutral road geometry is context, not administrative classification.
@@ -18,7 +27,7 @@
       filter:['match',['get','class'],classes,true,false],paint:{'line-color':'#e3dbbc','line-opacity':.55,'line-width':['interpolate',['linear'],['zoom'],minzoom,width,18,width*2]}});
     const label=(id,sourceLayer,classes,minzoom,size)=>({id,type:'symbol',source:'openmaptiles','source-layer':sourceLayer,minzoom,
       ...(classes?{filter:['match',['get','class'],classes,true,false]}:{}),
-      layout:{'text-field':text(chinese),'text-font':['Noto Sans Regular'],'text-size':size,'text-max-width':10,
+      layout:{'text-field':text(chinese,focus),'text-font':['Noto Sans Regular'],'text-size':size,'text-max-width':10,
         'text-padding':detailed?3:12,'text-allow-overlap':false,'text-ignore-placement':false,'symbol-sort-key':['coalesce',['get','rank'],100]},
       paint:{'text-color':'#ffffff','text-halo-color':'#17242c','text-halo-width':1.6,'text-halo-blur':.4}});
     const country=label('label-country','place',['country'],1,13);country.maxzoom=6;layers.push(country);
