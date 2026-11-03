@@ -13,7 +13,7 @@
 <meta name="description" content="卫星云图、台风路径与城市天气">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192-v3.png" type="image/png">
-<link rel="apple-touch-icon" href="apple-touch-icon-v3.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v3.png">
 <link rel="preconnect" href="https://api.open-meteo.com">
 <style>
 :root {
@@ -3590,17 +3590,19 @@ body.loop-still .pill.bad {
           level:severe ? "警告" : "关注",lvCls:severe ? "bad" : "warn",when:"未来 2 小时",
           advice:"根据预报安排出行，留意当地官方预警"});
       }
-      const tmax = (daily.temperature_2m_max || [])[0];
+      const riskDay=dateKeyOffset(0);
+      const dayIndex=riskDay?(daily.time||[]).indexOf(riskDay):-1;
+      const tmax = daily.temperature_2m_max?.[dayIndex];
       if (tmax != null && tmax >= 35) items.push({ cls: "hot", title: "高温", body: "今天最高气温约 " + Math.round(tmax) + " 度。", level: tmax >= 37 ? "警告" : "关注", lvCls: tmax >= 37 ? "bad" : "warn", when: "今天", advice: "防暑补水，减少正午户外" });
       const rainCodes = { 65: 1, 82: 1, 95: 1, 96: 1, 99: 1 };
-      const pmax = (daily.precipitation_probability_max || [])[0];
-      const dcode = (daily.weather_code || [])[0];
+      const pmax = daily.precipitation_probability_max?.[dayIndex];
+      const dcode = daily.weather_code?.[dayIndex];
       let rainHit = pmax != null && pmax >= 70 && rainCodes[dcode];
       if (!rainHit && hourly.time) {
         const now = Date.now();
         for (let i = 0; i < hourly.time.length; i++) {
           const t = weatherMs(hourly.time[i], w);
-          if (t < now - 30 * 60 * 1000 || t > now + 24 * 3600 * 1000) continue;
+          if (!Number.isFinite(t) || t < now || t > now + 24 * 3600 * 1000) continue;
           const pop = (hourly.precipitation_probability || [])[i];
           const code = (hourly.weather_code || [])[i];
           if (pop >= 70 && (rainCodes[code] || code >= 95)) { rainHit = true; break; }
@@ -3608,21 +3610,21 @@ body.loop-still .pill.bad {
       }
       if (rainHit) items.push({ cls: "rain", title: "降雨或雷暴风险", body: "模型预报降水概率较高，并有大雨、强阵雨或雷暴信号；不等同于暴雨预警。", level: "模型提示", lvCls: "warn", when: "未来24小时", advice: "带伞，关注当地官方预警" });
       const gust = cur.wind_gusts_10m || 0;
-      const vmax = Math.max(cur.wind_speed_10m || 0, gust, (daily.wind_speed_10m_max || [])[0] || 0);
+      const vmax = Math.max(cur.wind_speed_10m || 0, gust, daily.wind_speed_10m_max?.[dayIndex] || 0);
       if (vmax >= 17.2) items.push({ cls: "gale", title: "大风", body: "风力约 " + Math.round(vmax) + " 米/秒，" + windLevel(vmax) + " 级。", level: vmax >= 24.5 ? "警告" : "关注", lvCls: vmax >= 24.5 ? "bad" : "warn", when: "今天", advice: "注意高空坠物，减少户外停留" });
-      const riskDay=dateKeyOffset(0);
       const cold=(daily.time||[]).map((date,i)=>({date,temp:(daily.temperature_2m_min||[])[i]})).filter(r=>riskDay&&Number.isFinite(r.temp)&&r.temp<=0&&r.date>=riskDay);
       if (cold.length) items.push({ cls: "", title: '低温趋势', body: cold[0].date + ' 最低气温可能约 ' + Math.round(cold[0].temp) + '°；低温不直接等于道路结冰。', level: '模型参考', lvCls: 'warn', when: cold[0].date, advice: '远期存在不确定性，临近日期请再确认' });
-      let fog = cur.weather_code === 45 || cur.weather_code === 48;
-      if (!fog && hourly.weather_code) {
+      let fogTime = [45,48].includes(cur.weather_code) ? cur.time : '';
+      if (!fogTime && hourly.weather_code) {
         const now = Date.now();
-        for (let i = 0; i < (hourly.time || []).length && i < 12; i++) {
+        for (let i = 0; i < (hourly.time || []).length; i++) {
+          if (![45,48].includes(hourly.weather_code[i])) continue;
           const t = weatherMs(hourly.time[i], w);
-          if (t < now - 30 * 60 * 1000) continue;
-          if (hourly.weather_code[i] === 45 || hourly.weather_code[i] === 48) { fog = true; break; }
+          if (!Number.isFinite(t) || t < now || t > now + 12 * 3600000) continue;
+          fogTime = hourly.time[i]; break;
         }
       }
-      if (fog) items.push({ cls: "", title: "大雾", body: "能见度较差。", level: "关注", lvCls: "warn", when: "今天", advice: "出行小心，驾驶减速" });
+      if (fogTime) items.push({ cls: "", title: "大雾", body: "预报有雾，能见度可能降低。", level: "关注", lvCls: "warn", when: forecastTimeLabel(fogTime) + '附近', advice: "出行小心，驾驶减速" });
     }
     const box = $("alertList");
     const riskCoverage = w ? insights.risk(w) : null;
@@ -3766,11 +3768,23 @@ body.loop-still .pill.bad {
     rail.classList.toggle("open", !!state.satRailUser);
     $("satLayersBtn").setAttribute("aria-expanded", String(!!state.satRailUser));
   }
-  function ymdParts(d, tz) {
-    return new Intl.DateTimeFormat("en-GB", {
+  function ymdParts(d, clock) {
+    return clock.formatter.formatToParts(d);
+  }
+  function mapClock() {
+    const weatherZone=state.weather?.timezone, cityZone=state.city?.timezone;
+    const saved=mapClock.last;
+    if(saved && saved.weatherZone===weatherZone && saved.cityZone===cityZone)return saved;
+    for(const tz of [weatherZone,cityZone,'UTC']){
+      if(typeof tz!=='string'||!tz.trim())continue;
+      try{
+        const formatter=new Intl.DateTimeFormat("en-GB", {
       timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
       hour: "2-digit", minute: "2-digit", hourCycle: "h23"
-    }).formatToParts(d);
+        });
+        return mapClock.last={weatherZone,cityZone,tz,formatter,fallback:tz==='UTC'&&tz!==weatherZone&&tz!==cityZone};
+      }catch(_){/* A bad forecast zone must not prevent rendering the timeline. */}
+    }
   }
   function partVal(parts, t) {
     const x = parts.find(function (p) { return p.type === t; });
@@ -3782,12 +3796,12 @@ body.loop-still .pill.bad {
   }
   function fmtPlayZh(d, isForecast) {
     if (!(d instanceof Date) || isNaN(d.getTime())) return "—";
-    const tz = state.weather && state.weather.timezone || 'Asia/Shanghai';
-    const parts = ymdParts(d, tz);
+    const clock=mapClock();
+    if(clock.fallback)return d.toISOString().slice(0,16).replace('T',' ')+' UTC'+(isForecast?' · 预报':'');
+    const parts = ymdParts(d, clock);
     const get = function (t) { return partVal(parts, t); };
-    const nowP = ymdParts(new Date(), tz);
+    const nowP = ymdParts(new Date(), clock);
     const nget = function (t) { return partVal(nowP, t); };
-    const h = parseInt(get("hour"), 10) || 0;
     const m = get("minute") || "00";
     const same = get("year") === nget("year") && get("month") === nget("month") && get("day") === nget("day");
     const tom = addDaysYmd(nget("year"), nget("month"), nget("day"), 1);
@@ -3816,11 +3830,9 @@ body.loop-still .pill.bad {
       frames.push({ time: f.time, kind: "radar", url: f.url });
     });
     frames.push({ time: now, kind: "now" });
-    const d0 = new Date();
-    d0.setMinutes(0, 0, 0);
-    if (d0.getTime() / 1000 <= now) d0.setHours(d0.getHours() + 1);
+    const nextGridHour=(Math.floor(now/3600)+1)*3600;
     for (let h = 0; h < 48; h++) {
-      const t = Math.floor(d0.getTime() / 1000) + h * 3600;
+      const t = nextGridHour + h * 3600;
       frames.push({ time: t, kind: "forecast" });
     }
     state.timeline = frames;
@@ -3904,9 +3916,10 @@ body.loop-still .pill.bad {
     }
     const fr = frames[idx];
     const dt = fr && fr.time ? new Date(fr.time * 1000) : null;
-    if (timeEl) timeEl.textContent = dt ? fmtPlayZh(dt, fr && fr.kind === "forecast") : "今天 —";
-    ticks.setAttribute('aria-valuetext', timeEl ? timeEl.textContent + '（所选城市时间）' : '时间未提供');
-    if (timeEl) timeEl.title = state.weather && state.weather.timezone || 'Asia/Shanghai';
+    if (timeEl) timeEl.textContent = dt ? fmtPlayZh(dt, fr && fr.kind === "forecast") : "时间待定";
+    const clock=mapClock(), zoneHint=clock.fallback?'所选地点时区未知，使用 UTC':'所选城市时间：'+clock.tz;
+    ticks.setAttribute('aria-valuetext', dt && timeEl ? timeEl.textContent + '（'+zoneHint+'）' : '时间未提供');
+    if (timeEl) timeEl.title = zoneHint;
     if (playBtn) {
       playBtn.disabled = n < 2;
       playBtn.innerHTML = state.radarPlaying ? ICON_PAUSE : ICON_PLAY;
