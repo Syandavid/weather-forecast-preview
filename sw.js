@@ -1,4 +1,4 @@
-const CACHE = "weather-acceptance-v31.81";
+const CACHE = "weather-acceptance-v31.82";
 const ASSETS = [
   "./index.html",
   "./assets/weather-insights.js?v=31.64",
@@ -20,9 +20,17 @@ const ASSETS = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    // A new application cache must not install stale HTML from the HTTP cache.
-    // Keep addAll atomic: any missing resource leaves the previous worker active.
-    caches.open(CACHE).then((cache) => cache.addAll(ASSETS.map(url => new Request(url, {cache:'reload'}))))
+    (async()=>{
+      const shellKey='./index.html';
+      const shell=await fetch(new Request(shellKey,{cache:'reload'}));
+      const build=CACHE.split('-v').pop();
+      if(!shell.ok || !(await shell.clone().text()).includes('<strong id="appBuild">'+build+'</strong>'))
+        throw Error('App shell version mismatch');
+      const cache=await caches.open(CACHE);
+      await cache.addAll(ASSETS.filter(url=>url!==shellKey).map(url=>new Request(url,{cache:'reload'})));
+      // Store exactly the verified response; do not refetch a possibly different CDN copy.
+      await cache.put(shellKey,shell);
+    })()
   );
 });
 
