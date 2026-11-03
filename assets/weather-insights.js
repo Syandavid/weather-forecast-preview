@@ -104,7 +104,7 @@
     const pops=probabilities.map(r=>r.value).filter(v=>finite(v)&&v>=0&&v<=100);
     const intervals=(source.time||[]).map((t,i)=>{
       const stop=epoch(t,w),start=stop-minutes*60000,mm=source.precipitation?.[i];
-      return {start:Math.max(0,(start-now)/60000),end:Math.min(120,(stop-now)/60000),rate:finite(mm)&&mm>=0?mm*60/minutes:null,iso:t};
+      return {start:Math.max(0,(start-now)/60000),end:Math.min(120,(stop-now)/60000),rate:finite(mm)&&mm>=0?mm*60/minutes:null,iso:t,code:source.weather_code?.[i],gust:source.wind_gusts_10m?.[i]};
     }).filter(r=>r.end>r.start&&r.end>0&&r.start<120);
     return {available:true,rows,intervals,minutes,total,complete,storm,maxGust,popComplete,maxPop:pops.length?Math.max(...pops):null,maxMm:peak('mm')};
   }

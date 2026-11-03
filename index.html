@@ -1514,6 +1514,7 @@ body.loop-still .pill.bad {
                 <div class="phrase sk" id="phrase" aria-live="polite">正在获取天气</div>
               </div>
               <div id="currentEssentials" class="current-essentials"></div>
+              <div id="nearOutlook" class="current-essentials" hidden></div>
             </div>
             <div class="wx-note" id="wxNote"></div>
             <div class="update-notice" id="updateNotice" hidden><span>新版本已准备好</span><button id="applyUpdate" type="button">更新并重新打开</button></div>
@@ -1827,7 +1828,7 @@ body.loop-still .pill.bad {
     <button class="chip" id="closeAbout" type="button">关闭</button>
   </div>
 </div>
-<script src="assets/weather-insights.js?v=31.58"></script>
+<script src="assets/weather-insights.js?v=31.64"></script>
 <script src="assets/route-weather.js?v=31.54"></script>
 <script src="assets/storm-quality.js?v=31.55"></script>
 <script src="assets/map-weather.js?v=27.1"></script>
@@ -2641,6 +2642,7 @@ body.loop-still .pill.bad {
       $("temp").innerHTML = '--<span>°</span>';
       $("phrase").textContent = '正在获取所选城市天气';
       $("next2Card").hidden = true;
+      $("nearOutlook").hidden = true;
       $("clothingCard").hidden = true;
       $("outdoorWindows").textContent = '正在获取所选城市天气…';
       updateWeatherStamp(null, false, true);
@@ -3007,6 +3009,11 @@ body.loop-still .pill.bad {
   }
   function renderNext2Hours(w) {
     const el = $("next2Card"), data = insights.nextTwo(w);
+    const outlook = $('nearOutlook');
+    if (outlook) {
+      outlook.hidden = !w;
+      outlook.textContent = w ? shortOutlook(data) : '';
+    }
     if (!el) return;
     el.hidden = false;
     if (!data.available) {
@@ -3037,6 +3044,22 @@ body.loop-still .pill.bad {
       '</div><div><strong>未来 2 小时 · ' + (danger ? "需要注意" : warn ? "留意变化" : "短临参考") +
       '</strong><span>' + summary + '</span></div></div>' + graph + '<details class="short-term-detail"' + (expanded ? ' open' : '') + '><summary>查看分时预报</summary><div class="next2-grid">' + slots +
       '</div><small class="next2-source">Open-Meteo · ' + data.minutes + ' 分钟时段预报；每格雨量为对应时段量，累计量按时间重叠估算。15 分钟数据在部分地区由小时预报插值，不代表逐分钟实测。</small></details>';
+  }
+  function shortOutlook(data) {
+    if (!data.available) return '未来2小时：' + data.reason;
+    const windowLabel = r => {
+      const start = Math.floor(r.start), end = Math.ceil(r.end);
+      return start < 1 ? '未来' + end + '分钟内' : '约' + start + '–' + end + '分钟后';
+    };
+    const thunder = data.intervals.find(r => [95,96,99].includes(r.code));
+    const wind = data.intervals.find(r => Number.isFinite(r.gust) && r.gust >= 17.2);
+    const wet = data.intervals.find(r => r.rate > 0 || [51,53,55,56,57,61,63,65,66,67,71,73,75,77,80,81,82,85,86].includes(r.code));
+    if (thunder) return windowLabel(thunder) + '可能有雷暴，留意当地预警';
+    if (wind) return windowLabel(wind) + '可能有强阵风，留意当地预警';
+    if (wet) return windowLabel(wet) + '可能有降水，出门备雨具';
+    if (data.maxPop >= 40) return '未来2小时可能有降水，出门备雨具';
+    if (!data.complete || !data.popComplete) return '未来2小时资料不全，暂不能排除降水';
+    return '未来2小时预报未见明显降水';
   }
   function renderOutdoor() {
     const d = insights.outdoor(state.weather, state.activity), el = $("outdoorWindows");
@@ -4547,6 +4570,34 @@ body.loop-still .pill.bad {
       '<br>小时降水 ' + amount(w.mm,' mm') + ' · 风 ' + amount(w.wind,' m/s') + ' · 阵风 ' + amount(w.gust,' m/s') +
       '<br>' + escapeCityText(w.reason);
   }
+  async function drawRouteResult(requestId, route, from, to, weather) {
+    const current = () => requestId === state.routeRequest && state.tab === 'sat';
+    if (!current()) return false;
+    if (!state.satMap) await ensureSatMap();
+    if (!current() || !state.satMap) return false;
+    if (state.satView !== '2d') await setSatView('2d');
+    if (!current()) return false;
+    if (state.satLayer !== 'city') await setSatBase('city');
+    if (!current()) return false;
+    state.routeLayer = L.layerGroup();
+    L.geoJSON(route.geometry, { style: { color: "#22d3ee", weight: 8, opacity: .25, lineCap: "round", lineJoin: "round" }, interactive: false }).addTo(state.routeLayer);
+    L.geoJSON(route.geometry, { style: { color: "#e0f2fe", weight: 3.2, opacity: .98, lineCap: "round", lineJoin: "round", dashArray: "1 8" }, interactive: false }).addTo(state.routeLayer);
+    const startIcon = L.divIcon({ className: "route-pin route-start", html: "起", iconSize: [24, 24], iconAnchor: [12, 12] });
+    const endIcon = L.divIcon({ className: "route-pin route-end", html: "终", iconSize: [24, 24], iconAnchor: [12, 12] });
+    L.marker([from.lat, from.lon], { icon: startIcon, interactive: false }).addTo(state.routeLayer);
+    L.marker([to.lat, to.lon], { icon: endIcon, interactive: false }).addTo(state.routeLayer);
+    state.routeLayer.addTo(state.satMap);
+    state.routeWeatherLayer = L.layerGroup();
+    weather.forEach(function (w, i) {
+      const color = routeWeatherColor(w);
+      const marker = L.circleMarker([w.point[1], w.point[0]], { pane: "tyMarkPane", radius: 7, color: "#fff", weight: 2, fillColor: color, fillOpacity: .95, interactive: true });
+      marker.bindPopup('路线点 ' + (i+1) + '<br>' + routeWeatherDescription(w));
+      marker.addTo(state.routeWeatherLayer);
+    });
+    state.routeWeatherLayer.addTo(state.satMap);
+    state.satMap.fitBounds(L.geoJSON(route.geometry).getBounds().pad(.16), { maxZoom: 12, duration: prefersReduced() ? 0 : .7 });
+    return true;
+  }
   async function queryRoute() {
     const status = $("routeStatus");
     const searchButton = $('routeSearch');
@@ -4586,13 +4637,6 @@ body.loop-still .pill.bad {
       if (!departure.ok) { status.textContent = departure.reason; return; }
       const when = departure.time;
       if (when < Date.now()-60000) { status.textContent = '请使用当前或未来的出发时间；路线天气不支持历史出行。'; return; }
-      stage = '地图加载';
-      await ensureSatMap();
-      if (signal.aborted) return;
-      await setSatView("2d");
-      if (signal.aborted) return;
-      if (state.satLayer !== "city") await setSatBase("city");
-      if (requestId !== state.routeRequest) return;
       const routeUrl = OSRM_URL + from.lon + "," + from.lat + ";" + to.lon + "," + to.lat + "?alternatives=false&overview=full&geometries=geojson&steps=false&annotations=duration,distance";
       stage = '道路规划';
       status.textContent = '地点已识别，正在规划驾车路线（不是列车线路）…';
@@ -4602,14 +4646,6 @@ body.loop-still .pill.bad {
       if (requestId !== state.routeRequest) return;
       clearRoute(false);
       state.route = { from: from, to: to, when: when, route: route };
-      state.routeLayer = L.layerGroup();
-      L.geoJSON(route.geometry, { style: { color: "#22d3ee", weight: 8, opacity: .25, lineCap: "round", lineJoin: "round" }, interactive: false }).addTo(state.routeLayer);
-      L.geoJSON(route.geometry, { style: { color: "#e0f2fe", weight: 3.2, opacity: .98, lineCap: "round", lineJoin: "round", dashArray: "1 8" }, interactive: false }).addTo(state.routeLayer);
-      const startIcon = L.divIcon({ className: "route-pin route-start", html: "起", iconSize: [24, 24], iconAnchor: [12, 12] });
-      const endIcon = L.divIcon({ className: "route-pin route-end", html: "终", iconSize: [24, 24], iconAnchor: [12, 12] });
-      L.marker([from.lat, from.lon], { icon: startIcon, interactive: false }).addTo(state.routeLayer);
-      L.marker([to.lat, to.lon], { icon: endIcon, interactive: false }).addTo(state.routeLayer);
-      state.routeLayer.addTo(state.satMap);
       const samples = routeSamples(route);
       stage = '沿途天气加载';
       status.textContent = '驾车路线已找到，正在读取沿途预计到达时天气…';
@@ -4623,23 +4659,21 @@ body.loop-still .pill.bad {
       if (requestId !== state.routeRequest) return;
       if (!from.timezone && weather[0]?.timezone) from.timezone = weather[0].timezone;
       $('routeZone').textContent = (from.timezone ? '出发地时区：' + from.timezone : '出发地时区未知，出发时间以 UTC 显示') + ' · 行程耗时不包含实时拥堵';
-      state.routeWeatherLayer = L.layerGroup();
-      weather.forEach(function (w, i) {
-        const color = routeWeatherColor(w);
-        const marker = L.circleMarker([w.point[1], w.point[0]], { pane: "tyMarkPane", radius: 7, color: "#fff", weight: 2, fillColor: color, fillOpacity: .95, interactive: true });
-        marker.bindPopup('路线点 ' + (i+1) + '<br>' + routeWeatherDescription(w));
-        marker.addTo(state.routeWeatherLayer);
-      });
-      state.routeWeatherLayer.addTo(state.satMap);
-      state.satMap.fitBounds(L.geoJSON(route.geometry).getBounds().pad(.16), { maxZoom: 12, duration: prefersReduced() ? 0 : .7 });
       const km = (route.distance / 1000).toFixed(1), min = Math.round(route.duration / 60);
       if (status) status.innerHTML = '<strong>' + (weatherFailed ? '驾车路线已找到 · 天气暂不可用' : '驾车沿途到达时天气') + '</strong><br>' + escapeCityText(from.name + '（' + (from.admin || '地图点') + '）') + ' → ' + escapeCityText(to.name + '（' + (to.admin || '地图点') + '）') +
         '<br>约 ' + km + ' km · ' + min + ' 分钟<br>出发 ' + escapeCityText(window.RouteWeather.timeLabel(when,from.timezone)) +
         '<br>地点：' + escapeCityText(from.source || '地图选点') + ' / ' + escapeCityText(to.source || '地图选点') + ' · 道路：OSRM / OpenStreetMap（非铁路、非实时导航）' +
+        '<br><span id="routeMapNote">' + (state.satMap ? '正在标注地图…' : '地图未就绪，可先查看下方路线点。') + '</span>' +
         '<br>' + escapeCityText(samples[0].etaMethod) + ' · 灰色：数据不足；绿色仅表示未触发所设阈值，不保证道路安全。' +
         '<div class="route-weather">' + weather.map((w,i)=>'<details class="route-weather-chip"><summary><i style="width:8px;height:8px;border-radius:50%;background:' + routeWeatherColor(w) + ';display:inline-block"></i>路线点 ' + (i+1) + ' · ' + (w.complete ? '查看到达时天气' : escapeCityText(w.reason)) + '</summary>' + routeWeatherDescription(w) + '</details>').join('') + '</div>';
+      // Map rendering is optional. A slow CDN, failed tile engine or stale
+      // callback must never hide a usable itinerary or lock the query form.
+      drawRouteResult(requestId,route,from,to,weather).catch(()=>false).then(drawn=>{
+        const note=$('routeMapNote');
+        if(requestId===state.routeRequest && note)note.textContent=drawn?'路线与途经点已标在地图上。':'地图未就绪；可展开路线点，地图恢复后可重新查询以显示标注。';
+      });
     } catch (e) {
-      if (requestId === state.routeRequest && status) status.textContent = stage + '失败：' + (e.userMessage || (stage === '道路规划' ? '道路服务暂不可达或没有连通的驾车道路，请稍后重试；这不代表地点名称错误。' : '服务暂时不可用，请稍后重试。')) + '（路线版 31.63）';
+      if (requestId === state.routeRequest && status) status.textContent = stage + '失败：' + (e.userMessage || (stage === '道路规划' ? '道路服务暂不可达或没有连通的驾车道路，请稍后重试；这不代表地点名称错误。' : '服务暂时不可用，请稍后重试。')) + '（路线版 31.65）';
     } finally {
       if (requestId === state.routeRequest) {
         state.routeAbort = null;
