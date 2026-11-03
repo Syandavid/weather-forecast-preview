@@ -1455,7 +1455,7 @@ body.loop-still .pill.bad {
 @media (max-width: 480px) { .hero::before { background-position: 68% center; } }
 @media (prefers-reduced-motion: reduce) { .clothing-person, .clothing-umbrella, .clothing-rain, .sat-wind-barb.wind-flow { animation:none !important; } }
 </style>
-<link rel="stylesheet" href="assets/ui-clean.css?v=31.53">
+<link rel="stylesheet" href="assets/ui-clean.css?v=31.61">
 </head>
 <body>
 <div id="app">
@@ -1654,11 +1654,11 @@ body.loop-still .pill.bad {
               <button class="sat-boundary on" data-boundary="city" type="button"><i></i>市界</button>
               <button class="sat-boundary on" data-boundary="county" type="button"><i></i>县界</button>
             </div>
-            <button class="sat-ly on" data-china-range="true" type="button">
+            <button class="sat-ly" data-china-range="true" type="button" aria-pressed="false">
               <svg viewBox="0 0 24 24"><path d="M4 18c4-5 7-8 16-12M5 6h.01M9 5h.01M14 4h.01M18 8h.01M20 13h.01M18 18h.01M12 20h.01M7 19h.01"/></svg>
-              <span>中国边界预览 · 待核验</span><span class="ck">✓</span>
+              <span>对照用示意线（未核准）</span><span class="ck"></span>
             </button>
-            <div class="china-range-note">南海断续线、台湾省、西藏自治区 · 预览示意</div>
+            <div class="china-range-note">此开关仅控制示意线和重点地名，不能更改底图自带界线。<a href="https://www.mfa.gov.cn/ziliao_674904/zgdt/202607/t20260722_11989560.shtml" target="_blank" rel="noopener">核对中国地图原图（外交部）</a></div>
             </details>
             <button class="sat-ly on" data-overlay="radar" type="button">
               <svg viewBox="0 0 24 24"><path d="M4 18a8 8 0 0 1 16 0"/><path d="M7 18a5 5 0 0 1 10 0"/><circle cx="12" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
@@ -1827,7 +1827,7 @@ body.loop-still .pill.bad {
     <button class="chip" id="closeAbout" type="button">关闭</button>
   </div>
 </div>
-<script src="assets/weather-insights.js?v=31.47"></script>
+<script src="assets/weather-insights.js?v=31.58"></script>
 <script src="assets/route-weather.js?v=31.54"></script>
 <script src="assets/storm-quality.js?v=31.55"></script>
 <script src="assets/map-weather.js?v=27.1"></script>
@@ -1946,7 +1946,7 @@ body.loop-still .pill.bad {
     boundaryOptions: { country: true, state: true, city: true, county: true },
     boundaryDetailLayer: null,
     chinaRangeLayer: null,
-    chinaRangeOn: true,
+    chinaRangeOn: false,
     boundaryRequest: 0,
     boundaryTimer: 0,
     trafficLayer: null,
@@ -2586,6 +2586,7 @@ body.loop-still .pill.bad {
     syncMotion();
     scheduleRoadDetails();
     if (id === "sat") {
+      if (state.satMap) refreshVisibleRadar(false);
       if (state.satView !== "pro") ensureSatMap().then(function () { if (state.pendingMapCity) focusSelectedMap(); maybeAutoplayRadar(); });
     }
     syncProWeather();
@@ -2651,6 +2652,9 @@ body.loop-still .pill.bad {
       "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_gusts_10m,relative_humidity_2m,precipitation,is_day,wind_direction_10m,surface_pressure,dew_point_2m,visibility,cloud_cover" +
       "&hourly=temperature_2m,precipitation,precipitation_probability,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,cloud_cover,apparent_temperature" +
       "&minutely_15=temperature_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m" +
+      // One prior interval plus six hours covers a fresh (<=3 h old) cache
+      // and its next two hours, including departure just before midnight.
+      "&past_minutely_15=1&forecast_minutely_15=24" +
       "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,uv_index_max,wind_speed_10m_max,sunrise,sunset,sunshine_duration,daylight_duration" +
       "&forecast_days=16";
     const aurl = "https://air-quality-api.open-meteo.com/v1/air-quality?" + q + "&current=us_aqi,pm2_5,pm10";
@@ -2659,6 +2663,7 @@ body.loop-still .pill.bad {
       if(requestId===state.weatherRequest){state.aqi=aqi;renderMetrics();}
     }).catch(()=>{});
     let gotWx = false;
+    let cachedAqi;
     try {
       const w=await getJson(wurl,options);
       if (requestId !== state.weatherRequest) return;
@@ -2670,6 +2675,10 @@ body.loop-still .pill.bad {
       gotWx = true;
       hideWxNote();
       renderWeather();
+      // Closing the page before the optional AQI request finishes must not
+      // discard a fresh forecast that the user has already seen.
+      cachedAqi = state.aqi;
+      writeWxCache(c, w, cachedAqi);
     } catch (e) {
       if (requestId !== state.weatherRequest) return;
       state.weatherLoading = false;
@@ -2689,7 +2698,7 @@ body.loop-still .pill.bad {
     ensureCityHistory();
     await air;
     if (requestId !== state.weatherRequest) return;
-    if (gotWx) writeWxCache(c, state.weather, state.aqi);
+    if (gotWx && state.aqi !== cachedAqi) writeWxCache(c, state.weather, state.aqi);
     renderMetrics();
     renderAlerts();
   }
@@ -5220,6 +5229,7 @@ body.loop-still .pill.bad {
       scheduleTrafficSignals();
       scheduleBoundaryDetails();
     });
+    state.radarAutoTriedAt = Date.now();
     const radarMetaPromise = loadRadarMeta();
     await setSatBase(state.satLayer || "city");
     ensureSatLabels();
@@ -5237,7 +5247,7 @@ body.loop-still .pill.bad {
     scheduleBoundaryDetails();
     radarMetaPromise.then(function () {
       if (!state.satMap) return;
-      applySatOverlays();
+      applyRadarWhenVisible();
       updatePlayhead();
       maybeAutoplayRadar();
     });
@@ -5394,6 +5404,25 @@ body.loop-still .pill.bad {
     const seen=new Set();
     return (Array.isArray(frames)?frames:[]).filter(f=>f&&Number.isFinite(f.time)&&f.time>=now-2*3600-8*60&&f.time<=now+180)
       .sort((a,b)=>a.time-b.time).filter(f=>{if(seen.has(f.time))return false;seen.add(f.time);return true;}).slice(-12);
+  }
+  function radarViewVisible() {
+    return !!state.satMap && !document.hidden && state.tab === 'sat' && state.satView === '2d';
+  }
+  function applyRadarWhenVisible() {
+    state.radarNeedsApply = !radarViewVisible();
+    if (!state.radarNeedsApply) applySatOverlays();
+  }
+  async function refreshVisibleRadar(force) {
+    if (!radarViewVisible()) return;
+    const now=Date.now();
+    if (!force && (now-state.radarMetaLoadedAt<300000 || now-state.radarAutoTriedAt<60000)) {
+      if (state.radarNeedsApply) applyRadarWhenVisible();
+      return;
+    }
+    state.radarAutoTriedAt=now;
+    const pending=loadRadarMeta(!!force),request=state.radarMetaRequest;
+    await pending;
+    if(request===state.radarMetaRequest)applyRadarWhenVisible();
   }
   function radarFrameAt(time) {
     const frame=nearestFrame(freshRadarFrames(state.radarFrames),time);
@@ -6130,7 +6159,7 @@ body.loop-still .pill.bad {
       refreshBtn.classList.add("refreshing");
       refreshBtn.disabled = true;
       try {
-        await Promise.all([loadWeather(), loadStorms(), state.satMap ? loadRadarMeta(true).then(()=>applySatOverlays()) : Promise.resolve()]);
+        await Promise.all([loadWeather(), loadStorms(), refreshVisibleRadar(true)]);
       } finally {
         refreshBtn.classList.remove("refreshing");
         refreshBtn.disabled = false;
@@ -6396,12 +6425,13 @@ body.loop-still .pill.bad {
     state.stormRefreshTimer = setInterval(function () { if (!document.hidden) loadStorms(); }, 10 * 60 * 1000);
     if (state.radarRefreshTimer) clearInterval(state.radarRefreshTimer);
     state.radarRefreshTimer = setInterval(function () {
-      if (!document.hidden && state.satMap) { state.radarMeta = null; loadRadarMeta().then(function () { applySatOverlays(); }); }
+      refreshVisibleRadar(false);
     }, 5 * 60 * 1000);
   }
   window.addEventListener("resize", function () { invalidateMaps(); resizeParticles(); syncSatRail(); });
   document.addEventListener("visibilitychange", syncMotion);
   document.addEventListener('visibilitychange', scheduleRoadDetails);
+  document.addEventListener('visibilitychange', () => refreshVisibleRadar(false));
   function refreshTimeSensitiveCards() {
     if (document.hidden) return;
     updateWeatherStamp(state.weather, state.weatherCached, state.weatherLoading);

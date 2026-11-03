@@ -3,6 +3,7 @@
   const HOUR = 3600000;
   const finite = v => typeof v === 'number' && Number.isFinite(v);
   const timeCache = new Map();
+  const formatters = new Map();
   // Open-Meteo ISO values are city-local wall times, not browser-local times.
   function epoch(iso, w) {
     if (!iso) return NaN;
@@ -13,7 +14,12 @@
     let result = wall - ((w && w.utc_offset_seconds) || 0) * 1000;
     try {
       if (w && w.timezone) {
-        const fmt = new Intl.DateTimeFormat('en-CA', {timeZone:w.timezone, year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
+        let fmt = formatters.get(w.timezone);
+        if (!fmt) {
+          fmt = new Intl.DateTimeFormat('en-CA', {timeZone:w.timezone, year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
+          if(formatters.size>=32)formatters.delete(formatters.keys().next().value);
+          formatters.set(w.timezone,fmt);
+        }
         for (let i=0;i<3;i++) {
           const p = {};
           fmt.formatToParts(new Date(result)).forEach(x => {p[x.type]=x.value;});

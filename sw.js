@@ -1,8 +1,7 @@
-const CACHE = "weather-acceptance-v31.56";
+const CACHE = "weather-acceptance-v31.61";
 const ASSETS = [
-  "./",
   "./index.html",
-  "./assets/weather-insights.js?v=31.47",
+  "./assets/weather-insights.js?v=31.58",
   "./assets/route-weather.js?v=31.54",
   "./assets/storm-quality.js?v=31.55",
   "./assets/map-weather.js?v=27.1",
@@ -11,12 +10,11 @@ const ASSETS = [
   "./assets/city-search.js?v=31.32",
   "./assets/road-overlay.js?v=31.32",
   "./assets/vector-labels.js?v=31.34",
-  "./assets/ui-clean.css?v=31.53",
+  "./assets/ui-clean.css?v=31.61",
   "./manifest.webmanifest",
   "./icon-192-v3.png",
   "./icon-512-v3.png",
   "./apple-touch-icon-v3.png",
-  "./assets/weather-app-icon-v3.png",
   "./assets/weather-cover.jpg"
 ];
 

@@ -140,6 +140,9 @@ button, summary { touch-action:manipulation; }
 .map-settings summary { cursor:pointer; font-size:14px; min-height:44px; padding:10px 8px; }
 #satOpacity { min-height:44px; }
 .sat-control small, .china-range-note { font-size:12px; line-height:1.6; }
+#satRail .china-range-note, #satRail .sat-subtitle { color:var(--muted); }
+#satRail .china-range-note a, .about a { color:var(--sky); text-decoration:underline; text-underline-offset:.15em; }
+#satRail .china-range-note a { display:flex; align-items:center; min-height:44px; font-size:14px; overflow-wrap:anywhere; }
 .sat-storms { top:auto; bottom:100px; left:122px; right:auto; width:auto; max-width:calc(100% - 140px); }
 .sat-storms-panel { display:none; }
 .sat-storms-toggle { display:flex !important; font-size:12px; }
