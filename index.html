@@ -688,6 +688,7 @@ button { color: inherit; }
   box-shadow: 0 8px 22px rgba(0,0,0,0.3);
 }
 .sat-storms-toggle .gchip { margin-left: auto; }
+.sat-fix-stamp { display:block; white-space:normal; color:#c8d8ed; font-size:11px; line-height:1.35; font-variant-numeric:tabular-nums; }
 .sat-storms-panel {
   display: none; flex-direction: column;
   width: 220px; min-height: 0;
@@ -1774,9 +1775,9 @@ body.loop-still .pill.bad {
             <div><i class="lg-r7"></i>风圈 7级</div>
             <div><i class="lg-r10"></i>风圈 10级</div>
             <div><i class="lg-r12"></i>风圈 12级</div>
-            <div><i class="lg-dash"></i>虚线＝预报</div>
+            <div><i class="lg-dash"></i>实线、实心点＝历史观测；虚线、空心点＝路径预报。点按路径点查看时间、风速与气压。</div>
             <div>风箭头指向吹去方向；越长、移动越快表示风速越大。静风或风向缺测时不画箭头。</div>
-            <div><i class="lg-cone"></i>锥＝不确定范围</div>
+            <div><i class="lg-cone"></i>阴影随预报时长示意性加宽，不是官方概率范围或风圈。</div>
             <div><i class="lg-rain"></i>降雨颜色＝预报雨量 mm</div>
             <div><i class="lg-city"></i>蓝色光圈＝所选城市（始终置顶）</div>
             </div>
@@ -1821,7 +1822,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">32.04</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">32.05</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -1839,7 +1840,7 @@ body.loop-still .pill.bad {
 </div>
 <script src="assets/weather-insights.js?v=31.98"></script>
 <script src="assets/route-weather.js?v=31.54"></script>
-<script src="assets/storm-quality.js?v=31.81"></script>
+<script src="assets/storm-quality.js?v=32.05"></script>
 <script src="assets/map-weather.js?v=27.1"></script>
 <script src="assets/pro-weather.js?v=28"></script>
 <script src="assets/city-search.js?v=31.32"></script>
@@ -5467,7 +5468,9 @@ body.loop-still .pill.bad {
         peek.innerHTML = escapeCityText(s.nameZh || s.nameEn || "台风") +
           ' <span class="grade ' + stormGradeClass(s.grade) + '">' + escapeCityText(s.gradeZh || "") + "</span>" +
           (s.windMs != null ? " · " + windLevel(s.windMs) + "级" : "") +
-          (dist != null ? " · " + dist + " km" : "");
+          (dist != null ? " · " + dist + " km" : "") +
+          '<small class="sat-fix-stamp">中心观测 · ' + window.StormQuality.fixAgeLabel(s.time) +
+          '<br>' + window.StormQuality.utcLabel(s.time) + ' · ' + escapeCityText(s.dataSource || '来源待确认') + '</small>';
       }
     }
   }
@@ -6083,13 +6086,15 @@ body.loop-still .pill.bad {
     if (pts.length) pts.push(pts[0]);
     return pts;
   }
-  function pointTip(pt) {
+  function pointTip(pt, future) {
     const g = pt.gradeZh || gradeZh(pt.grade, pt.windMs);
     const lv = pt.windMs != null
       ? (Math.round(pt.windMs * 10) / 10) + " 米/秒 · " + windLevel(pt.windMs) + " 级"
       : "—";
     const pr = pt.pressure ? pt.pressure + " 百帕" : "—";
-    return fmtBjShort(pt.time) + "<br>" + escapeCityText(g) + "<br>风速 " + lv + "<br>气压 " + escapeCityText(pr);
+    return "<b>" + (future ? "路径预报" : "历史观测") + "</b><br>" + window.StormQuality.utcLabel(pt.time) +
+      (future && Number.isFinite(pt.leadH) ? " · 起报后 +" + pt.leadH + " 小时" : "") +
+      "<br>" + escapeCityText(g) + "<br>风速 " + lv + "<br>气压 " + escapeCityText(pr);
   }
   function drawSeg(layer, a, b, color, dashed, dim, selected) {
     const op = dim ? 0.55 : 1;
@@ -6152,8 +6157,8 @@ body.loop-still .pill.bad {
       const b = [past[i].lat, past[i].lon];
       drawSeg(layerGroup, a, b, gradeColor(past[i].grade, past[i].windMs), false, dim, selected);
     }
-    if (past.length && fut.length) {
-      const last = past[past.length - 1];
+    if (fut.length && (storm.lat != null && storm.lon != null || past.length)) {
+      const last = storm.lat != null && storm.lon != null ? storm : past[past.length - 1];
       drawSeg(layerGroup, [last.lat, last.lon], [fut[0].lat, fut[0].lon], gradeColor(fut[0].grade, fut[0].windMs), true, dim, selected);
     }
     for (let i = 1; i < fut.length; i++) {
@@ -6164,19 +6169,19 @@ body.loop-still .pill.bad {
       const r = selected ? 6 : 4.5;
       const c = gradeColor(pt.grade, pt.windMs);
       const m = L.circleMarker([pt.lat, pt.lon], {
-        pane: dotPane, radius: r, color: "#fff", weight: 1.5,
+        pane: dotPane, radius: r, color: "#fff", weight: 1.5, bubblingMouseEvents:false,
         fillColor: c, fillOpacity: 0.95 * op, opacity: op
       }).addTo(layerGroup);
-      m.bindTooltip(pointTip(pt), { className: "sat-tt", direction: "top", offset: [0, -8], sticky: true });
+      m.bindPopup(pointTip(pt,false));
     });
 
     const placed = [];
     fut.forEach(function (pt) {
       const c = gradeColor(pt.grade, pt.windMs);
       L.circleMarker([pt.lat, pt.lon], {
-        pane: dotPane, radius: 4, color: c, weight: 1.6,
-        fillColor: "#081018", fillOpacity: 0.55 * op, opacity: op, interactive: false
-      }).addTo(layerGroup);
+        pane: dotPane, radius: selected ? 8 : 6, color: c, weight: 2, bubblingMouseEvents:false,
+        fillColor: "#081018", fillOpacity: 0.55 * op, opacity: op
+      }).addTo(layerGroup).bindPopup(pointTip(pt,true));
       let skip = false;
       try {
         const xy = map.latLngToLayerPoint([pt.lat, pt.lon]);
@@ -6853,6 +6858,7 @@ body.loop-still .pill.bad {
   document.addEventListener('visibilitychange', () => refreshVisibleRadar(false));
   function refreshTimeSensitiveCards() {
     if (document.hidden) return;
+    if(state.tab==='sat' && ov('typhoon'))syncStormHud();
     if(state.tab==='sat' && state.satView==='2d' && state.satMap && needsMet() && !state.metLoadingKey &&
        (state.metLoadFailed || !state.metGrid || Date.now()-state.metGrid.loadedAt>=600000))loadMetGrid(false);
     updateWeatherStamp(state.weather, state.weatherCached, state.weatherLoading);

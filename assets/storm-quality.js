@@ -5,6 +5,14 @@
   function instant(stamp){return typeof stamp==='string'&&/(?:Z|[+-]\d{2}:?\d{2})$/i.test(stamp)?Date.parse(stamp):NaN;}
   function utcLabel(stamp){const t=instant(stamp);return Number.isFinite(t)?new Date(t).toISOString().slice(0,16).replace('T',' ')+' UTC':'时间未确认';}
   function age(stamp,now){const t=instant(stamp);return Number.isFinite(t)?(now-t)/3600000:Infinity;}
+  function fixAgeLabel(stamp,now=Date.now()){
+    const elapsed=now-instant(stamp);
+    if(!Number.isFinite(elapsed))return '观测时间未确认';
+    if(elapsed<0)return '观测时间晚于当前';
+    if(elapsed>12*3600000)return '位置已过期';
+    const m=Math.floor(elapsed/60000);
+    return m===0?'不足1分钟前':(m>=60?Math.floor(m/60)+'小时':'')+(m%60?m%60+'分钟':'')+'前';
+  }
   function normalizeSnapshot(raw){
     if(!raw||!Array.isArray(raw.storms)||!Array.isArray(raw.errors))return null;
     if(raw.storms.some(s=>!s||typeof s!=='object'))return null;
@@ -83,5 +91,5 @@
     return {storms,notes,status,complete:Object.values(status).every(s=>s==='live'||s==='snapshot')};
   }
   const coverageNote='台风资料源为 CMA / NHC，尚非全球所有洋区完整覆盖；未接入或缺失资料不能理解为没有台风。';
-  root.StormQuality={merge,age,utcLabel,forecastPoints,coverageNote,normalizeSnapshot};
+  root.StormQuality={merge,age,fixAgeLabel,utcLabel,forecastPoints,coverageNote,normalizeSnapshot};
 })(typeof window!=='undefined'?window:globalThis);
