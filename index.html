@@ -1665,11 +1665,7 @@ body.loop-still .pill.bad {
               <button class="sat-boundary on" data-boundary="city" type="button"><i></i>市界</button>
               <button class="sat-boundary on" data-boundary="county" type="button"><i></i>县界</button>
             </div>
-            <button class="sat-ly" data-china-range="true" type="button" aria-pressed="false">
-              <svg viewBox="0 0 24 24"><path d="M4 18c4-5 7-8 16-12M5 6h.01M9 5h.01M14 4h.01M18 8h.01M20 13h.01M18 18h.01M12 20h.01M7 19h.01"/></svg>
-              <span>对照用示意线（未核准）</span><span class="ck"></span>
-            </button>
-            <div class="china-range-note">此开关仅控制示意线和重点地名，不能更改底图自带界线。<a href="https://www.mfa.gov.cn/ziliao_674904/zgdt/202607/t20260722_11989560.shtml" target="_blank" rel="noopener">核对中国地图原图（外交部）</a></div>
+            <div class="china-range-note">南海断续线示意层未通过核验，已撤下。底图自带界线未获本项目核准。<a href="https://www.mfa.gov.cn/ziliao_674904/zgdt/202607/t20260722_11989560.shtml" target="_blank" rel="noopener">核对中国地图原图（外交部）</a></div>
             </details>
             <button class="sat-ly on" data-overlay="radar" type="button">
               <svg viewBox="0 0 24 24"><path d="M4 18a8 8 0 0 1 16 0"/><path d="M7 18a5 5 0 0 1 10 0"/><circle cx="12" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
@@ -1831,7 +1827,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">31.94</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">31.95</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -1839,7 +1835,7 @@ body.loop-still .pill.bad {
     <p>预警根据台风实况和气温、未来 2 小时降雨/雷暴/阵风、高温、暴雨、大风、低温、大雾阈值生成。地图会自动定位到所选城市，云图透明度、高清城市底图和图层可调。</p>
     <p>“3D 城市”的道路、城镇名称和建筑由矢量底图提供。地图选点立即按坐标更新所选地点天气，不自动切换页面；路线模式下选点只设置路线起终点。3D 地形属于公共 DEM，部分地区的起伏精度和覆盖范围会有差异。</p>
     <p>高清城市模式可叠加真实色或红外卫星层；进入未来时间使用模型云雨预报，不冒充未来卫星实拍。道路级别、行政边界和红绿灯点位可在图层面板配置；地名显示取决于源站字段，部分地点仍缺少中文或当地语言名称。</p>
-    <p>中国边界预览尚未完成可靠来源、坐标与投影核验，不能作为官方标准地图使用，也不代表边界验收通过。当前候选版本中的南海断续线及重点地名仍需替换或逐项核验。正式对外发布前必须完成这项验收，并核对所用地图的来源、授权及审图信息；<a href="https://bzdt.tianditu.gov.cn/" target="_blank" rel="noopener">打开标准地图服务</a>。</p>
+    <p>中国边界预览尚未完成可靠来源、坐标与投影核验，不能作为官方标准地图使用，也不代表边界验收通过。验收预览未提供该示意层；可单独查看官方原图。正式对外发布前必须完成这项验收，并核对所用地图的来源、授权及审图信息；<a href="https://bzdt.tianditu.gov.cn/" target="_blank" rel="noopener">打开标准地图服务</a>。</p>
     <p>点击“路线”输入起点、终点和出发时间，可在卫星/高清地图上突出显示路线，并用颜色标出沿途天气。路线来自公共 OSRM，红绿灯和细分道路来自 OSM；公共数据接口可能限流，且不代表实时红绿灯相位或道路拥堵。</p>
     <p>城市底图与天气云雨层不是同一种数据。放大可查看底图细节，但不会把云雨预报变成米级观测；模型插值只改善显示平滑度，不增加原始数据精度。叠加云层可以关闭或调透明度，原始光学影像中的云不能仅靠前端彻底去除。台风“风眼”是路径资料中的中心估计，不冒充实时雷达眼墙。</p>
     <p>刷新策略：天气按模型更新节奏自动刷新，台风约 10 分钟检查，地图雷达按公开接口约 5 分钟检查；更快轮询不代表数据更快更新，也可能触发服务限流。</p>
@@ -1890,25 +1886,7 @@ body.loop-still .pill.bad {
   // shown east of Taiwan belongs to a ten-segment map presentation and is not
   // included here because this layer is explicitly the South China Sea
   // nine-segment line.
-  const CHINA_OFFICIAL_RANGE = {
-    type: "FeatureCollection",
-    features: [
-      { type: "Feature", properties: { kind: "nine-dash" }, geometry: { type: "MultiLineString", coordinates: [
-        [[108.302017,6.010893],[108.207924,6.522497],[108.234314,7.073835]],
-        [[109.301506,16.199545],[109.592995,15.815694],[109.855095,15.158954]],
-        [[110.32325,12.2405],[110.306892,11.872135],[110.065414,11.251521]],
-        [[111.794563,3.408477],[112.31736,3.526618],[112.84948,3.744957]],
-        [[115.544106,7.158346],[115.896019,7.573803],[116.242157,7.98245]],
-        [[118.538605,10.906545],[118.809418,11.457198],[118.978142,11.979657]],
-        [[119.06131,16.028913],[119.060394,15.615799],[119.059052,15.008851]],
-        [[119.998688,18.990286],[119.716179,18.52128],[119.473083,18.015577]],
-        [[121.91169,21.697515],[121.461227,21.165651],[121.174026,20.826548]],
-      ] } },
-      { type: "Feature", properties: { kind: "label", label: "南海断续线" }, geometry: { type: "Point", coordinates: [117.7,14.0] } },
-      { type: "Feature", properties: { kind: "label", label: "台湾省" }, geometry: { type: "Point", coordinates: [121.0,23.7] } },
-      { type: "Feature", properties: { kind: "label", label: "西藏自治区" }, geometry: { type: "Point", coordinates: [89.2,31.2] } }
-    ]
-  };
+  const CHINA_OFFICIAL_RANGE = {type:"FeatureCollection",features:[]};
   const DEFAULT_CITY = { name: "上海", lat: 31.23, lon: 121.47, admin: "上海市", country_code: "CN", labelLanguage: "zh" };
   const GRADE_ZH = { TD: "热带低压", TS: "热带风暴", STS: "强热带风暴", TY: "台风", STY: "强台风", SuperTY: "超强台风", SUPERTY: "超强台风", PTC: "潜在热带气旋", HU: "飓风", MH: "重大飓风" };
   const CMA_DIR = { N: "北", NNE: "东北偏北", NE: "东北", ENE: "东北偏东", E: "东", ESE: "东南偏东", SE: "东南", SSE: "东南偏南", S: "南", SSW: "西南偏南", SW: "西南", WSW: "西南偏西", W: "西", WNW: "西北偏西", NW: "西北", NNW: "西北偏北" };
@@ -3443,6 +3421,7 @@ body.loop-still .pill.bad {
     return s.lat != null && s.lon != null;
   }
   async function loadStorms() {
+    const started = state.stormCheckStarted = Date.now();
     const requestId = ++state.stormRequest;
     if (state.stormAbort) state.stormAbort.abort();
     const controller = new AbortController();
@@ -3460,16 +3439,18 @@ body.loop-still .pill.bad {
       const listTxt = await getText("https://typhoon.nmc.cn/weatherservice/typhoon/jsons/list_default", options);
       const list = unwrapJson(listTxt);
       if (!Array.isArray(list.typhoonList)) throw Error('invalid CMA list');
-      if (list.typhoonList.some(t=>!Array.isArray(t)||t.length<8)) throw Error('invalid CMA inventory entry');
-      const active = list.typhoonList.filter((t) => t[7] === "start");
+      const recognized=t=>Array.isArray(t)&&t.length>=8&&['start','stop'].includes(t[7])&&/^\d+$/.test(String(t[0]));
+      const inventoryReliable=list.typhoonList.every(recognized);
+      const active = list.typhoonList.filter((t) => recognized(t) && t[7] === "start");
       cmaActiveIds = active.map(t=>'cma-'+t[0]);
       await Promise.all(active.map(async t=>{
         try {
           const viewTxt = await getText("https://typhoon.nmc.cn/weatherservice/typhoon/jsons/view_" + t[0], options);
-          cmaLive.push(parseCmaStorm(unwrapJson(viewTxt)));
+          const storm=parseCmaStorm(unwrapJson(viewTxt));
+          if(storm.id==='cma-'+t[0] && storm.status==='start')cmaLive.push(storm);
         } catch (e) {}
       }));
-      cmaOk = cmaLive.length === active.length;
+      cmaOk = inventoryReliable && cmaLive.length === active.length;
     } catch (e) {}})(),
       (async()=>{try {
       const nhc = await getJson("https://www.nhc.noaa.gov/CurrentStorms.json", options);
@@ -3478,8 +3459,11 @@ body.loop-still .pill.bad {
       nhcOk = true;
     } catch (e) {}})()
     ]); } finally { clearTimeout(timer); if(requestId===state.stormRequest)state.stormAbort=null; }
-    const quality = window.StormQuality.merge({CMA:cmaOk?cmaLive:cmaActiveIds?{storms:cmaLive,activeIds:cmaActiveIds}:null,NHC:nhcOk?nhcLive:null},snap);
     if (requestId !== state.stormRequest) return;
+    // iOS may thaw an old fetch before delivering pageshow/visibilitychange.
+    // Such a reply is not evidence about the current inventory.
+    if(Date.now()-started>=600000 || Date.now()<started){resumeStormCheck();return;}
+    const quality = window.StormQuality.merge({CMA:cmaOk?cmaLive:cmaActiveIds?{storms:cmaLive,activeIds:cmaActiveIds}:null,NHC:nhcOk?nhcLive:null},snap);
     state.storms = quality.storms.filter(isShownStorm);
     state.stormQuality = quality;
     state.source = Object.entries(quality.status).map(([p,s])=>p+' '+({live:'源站',snapshot:'快照',partial:'部分资料失效',unavailable:'数据待更新'}[s])).join(' · ');
@@ -3493,6 +3477,18 @@ body.loop-still .pill.bad {
     updateTyNavSpin();
     const about = $("aboutSnap");
     if (about) about.textContent = '台风数据：' + state.source + (state.snapUpdated ? ' · 快照文件时间 '+state.snapUpdated : '') + '。' + (quality.notes.length ? quality.notes.join('；') + '。' : '') + '活动资料按观测时间单独核验；文件下载时间不代表观测时间。' + window.StormQuality.coverageNote;
+  }
+  function resumeStormCheck() {
+    if(document.hidden || !state.stormCheckStarted)return;
+    const elapsed=Date.now()-state.stormCheckStarted;
+    if(elapsed>=0 && elapsed<600000)return;
+    // A phone may suspend both fetch deadlines and intervals. Invalidate
+    // the previously displayed inventory before waiting for the new response.
+    state.storms=[];state.selected=null;state.snapUpdated='';
+    state.stormQuality={complete:false,status:{CMA:'unavailable',NHC:'unavailable'},notes:['正在重新核验台风资料，先前结果不能代表当前状态。']};
+    state.source='正在重新核验台风资料';const about=$('aboutSnap');if(about)about.textContent=state.source;
+    renderTyphoonList();renderAlerts();drawSatTracks();updateBanner();updateTyNavSpin();
+    loadStorms();
   }
   function wpacFirst(a, b) {
     const rank = (s) => (s.basin === "WPAC" ? 0 : 1);
@@ -6685,6 +6681,8 @@ body.loop-still .pill.bad {
   }
   window.addEventListener("resize", function () { invalidateMaps(); resizeParticles(); syncSatRail(); });
   document.addEventListener("visibilitychange", syncMotion);
+  document.addEventListener('visibilitychange',resumeStormCheck);
+  window.addEventListener('pageshow',resumeStormCheck);
   document.addEventListener('visibilitychange', scheduleRoadDetails);
   document.addEventListener('visibilitychange', () => refreshVisibleRadar(false));
   function refreshTimeSensitiveCards() {
