@@ -435,7 +435,9 @@ button { color: inherit; }
 .sat-route-status strong { color:var(--text); }
 .sat-route-status .route-weather { display:grid; gap:4px; margin-top:6px; }
 .route-weather-chip { display:flex; align-items:center; gap:6px; padding:5px 6px; border-radius:7px; background:rgba(255,255,255,.055); }
-.route-point-focus { min-height:44px; margin-top:6px; color:var(--text); background:transparent; border:1px solid currentColor; border-radius:8px; padding:4px 10px; cursor:pointer; }
+.route-point-focus { min-height:44px; max-width:100%; font:inherit; overflow-wrap:anywhere; margin-top:6px; color:var(--text); background:transparent; border:1px solid currentColor; border-radius:8px; padding:4px 10px; cursor:pointer; }
+.leaflet-container .route-point-popup a.leaflet-popup-close-button { display:grid; place-items:center; width:44px; height:44px; color:#344054; font-size:1.125rem; }
+.route-point-popup .leaflet-popup-content { padding-top:10px; overflow-wrap:anywhere; }
 .route-number-pin { display:grid; place-items:center; }
 .route-number-pin b { display:grid; place-items:center; min-width:25px; height:25px; border-radius:50%; background:#10202e; color:white; border:3px solid var(--route-risk); box-shadow:0 1px 4px #000; }
 .route-pin { display:grid; place-items:center; width:24px; height:24px; border-radius:50%; border:2px solid #fff; color:#fff; font-size:10px; font-weight:750; box-shadow:0 2px 10px rgba(0,0,0,.4); }
@@ -1827,7 +1829,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">31.90</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">31.91</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -4679,7 +4681,7 @@ body.loop-still .pill.bad {
       const title='路线点 '+(i+1)+(i===0?'（起点）':i===weather.length-1?'（终点）':'');
       const icon=L.divIcon({className:'route-number-pin',html:'<b style="--route-risk:'+color+'">'+(i+1)+'</b>',iconSize:[44,44],iconAnchor:[22,22]});
       const marker=L.marker([w.point[1],w.point[0]],{icon,title,alt:title,zIndexOffset:1000});
-      marker.bindPopup('路线点 ' + (i+1) + '<br>' + routeWeatherDescription(w));
+      marker.bindPopup('路线点 ' + (i+1) + '<br>' + routeWeatherDescription(w),{className:'route-point-popup'});
       marker.addTo(state.routeWeatherLayer);
       markers.push(marker);
     });
