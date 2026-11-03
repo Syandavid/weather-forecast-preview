@@ -521,8 +521,13 @@ button { color: inherit; }
   cursor: pointer;
 }
 .sat-tick {
-  flex: 1; position: relative; min-width: 0;
+  position:absolute; top:0; bottom:0; width:1px; pointer-events:none;
 }
+.sat-time-context { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; color:#d8eaff; }
+.sat-time-context select { font:inherit; min-height:44px; max-width:52%; padding:0 6px; background:#192639; color:#f5f8ff; border:1px solid #53677b; border-radius:9px; }
+.sat-time-context strong { color:#a8e6dd; }
+.sat-time-context strong[data-kind="forecast"] { color:#a9d2ff; }
+.map-wrap.view-3d .sat-time-context { display:none; }
 .sat-tick::before {
   content: "";
   position: absolute; left: 0; top: 8px; bottom: 8px;
@@ -1696,7 +1701,6 @@ body.loop-still .pill.bad {
               <small>降低透明度可让城市与道路更清晰；不会篡改原始云图。</small>
             </div>
             <details class="sat-time-settings"><summary>时间与播放</summary>
-              <label>播放范围<select id="satLoopRange"><option value="all">全部：回看及未来 48 小时</option><option value="past">只看过去约 2 小时雷达</option><option value="next6">从现在看未来 6 小时</option></select></label>
               <small>回看只播放已有雷达时次；未来云雨是模型预报，不是卫星照片。</small>
               <label>时间轴时区<select id="satClockMode"><option value="city">所选城市</option><option value="utc">世界时 UTC</option></select></label>
               <label>动画速度<select id="satLoopSpeed"><option value="1000">慢速</option><option value="550" selected>标准</option><option value="350">快速</option></select></label>
@@ -1736,6 +1740,10 @@ body.loop-still .pill.bad {
             <button class="sat-detail-btn" id="satCityDetailQuick" type="button">⌖ 定位并放大城市细节</button>
           </div>
           <div class="sat-playbar" id="satPlaybar">
+            <div class="sat-time-context">
+              <span><strong id="satFrameKind">当前时刻</strong> · <span id="satClockTag">城市时间</span></span>
+              <select id="satLoopRange" aria-label="播放范围"><option value="all">全时段 · 至未来 48 小时</option><option value="past">过去 2 小时 · 雷达回看</option><option value="next6">未来 6 小时 · 短时预报</option></select>
+            </div>
             <div class="sat-playbar-row">
               <button class="sat-play-btn" id="satPlay" type="button" aria-label="播放">
                 <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -1813,7 +1821,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">32.03</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">32.04</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -3988,12 +3996,12 @@ body.loop-still .pill.bad {
     ticks.setAttribute('aria-valuemin', '0');
     ticks.setAttribute('aria-valuemax', String(n-1));
     ticks.setAttribute('aria-valuenow', String(idx));
-    const stamp = n + ':' + (state.loopRange || 'all') + (state.fcUnavailable ? "-na" : "");
+    const stamp = n + ':' + frames.findIndex(f=>f.kind==='now') + ':' + (state.loopRange || 'all');
     if (ticks.getAttribute("data-n") !== stamp) {
       let html = "";
       for (let i = 0; i < n; i++) {
         const k = frames[i].kind || "";
-        html += '<span class="sat-tick' + (k === "forecast" ? " future" : "") + (k === "now" ? " is-now" : "") + '" data-i="' + i + '"></span>';
+        html += '<span class="sat-tick' + (k === "forecast" ? " future" : "") + (k === "now" ? " is-now" : "") + '" style="left:'+ (n>1?100*i/(n-1):0) +'%" data-i="' + i + '"></span>';
       }
       html += '<div class="sat-now-mark" id="satNowMark"><b>现在</b></div>';
       html += '<div class="sat-playhead" id="satPlayhead"></div>';
@@ -4018,6 +4026,9 @@ body.loop-still .pill.bad {
     if (timeEl && fr.kind === 'radar') timeEl.textContent += ' · 回看';
     if (timeEl && n === 1 && state.loopRange === 'past') timeEl.textContent += ' · 无历史雷达帧';
     const clock=mapClock(), zoneHint=state.mapClockMode==='utc'?'世界时 UTC':clock.fallback?'所选地点时区未知，使用 UTC':'所选城市时间：'+clock.tz;
+    const badge=$('satFrameKind'),zone=$('satClockTag');
+    if(badge){badge.dataset.kind=fr.kind;badge.textContent=fr.kind==='forecast'?'模型预报':fr.kind==='radar'?'雷达回看':'当前时刻';}
+    if(zone){zone.textContent=state.mapClockMode==='utc'||clock.fallback?'UTC':'城市时间';zone.title=zoneHint;}
     ticks.setAttribute('aria-valuetext', dt && timeEl ? timeEl.textContent + '（'+zoneHint+'）' : '时间未提供');
     if (timeEl) timeEl.title = zoneHint;
     if (playBtn) {
