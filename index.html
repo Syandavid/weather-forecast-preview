@@ -1351,35 +1351,19 @@ body.loop-still .pill.bad {
 .clothing-head strong { font-size: 15px; }
 .clothing-head small { color: var(--muted); }
 .clothing-body { display: flex; align-items: center; gap: 14px; margin-top: 8px; }
-.clothing-scene { position: relative; width: 86px; height: 74px; flex: none; }
-.clothing-person { position: absolute; left: 35px; bottom: 7px; width: 25px; height: 45px; border-radius: 13px 13px 7px 7px; background: linear-gradient(90deg, #4ea2ff, #7ec5ff); box-shadow: 0 8px 18px rgba(0,0,0,.22); animation: personBob 2.6s ease-in-out infinite; }
-.clothing-person::before { content:""; position: absolute; width: 19px; height: 19px; left: 3px; top: -14px; border-radius: 50%; background: #f3bd8f; box-shadow: inset -3px -2px 0 rgba(0,0,0,.08); }
-.clothing-person::after { content:""; position: absolute; width: 7px; height: 28px; left: -7px; top: 6px; border-radius: 8px; background: #f3bd8f; transform: rotate(13deg); }
-.clothing-coat { position: absolute; inset: 0; border-radius: 13px 13px 7px 7px; background: linear-gradient(90deg,#273449,#63748d); display: none; }
-.clothing-person.cold .clothing-coat, .clothing-person.rain .clothing-coat { display:block; }
-.clothing-person.cold { background: linear-gradient(90deg,#334155,#94a3b8); }
-.clothing-person.hot { background: linear-gradient(90deg,#f59e0b,#fb7185); }
-.clothing-umbrella { display: none; position: absolute; left: 10px; top: 7px; width: 45px; height: 28px; border-radius: 45px 45px 0 0; background: #4ea2ff; box-shadow: inset 0 -4px 0 rgba(0,0,0,.13); }
-.clothing-umbrella::after { content:""; position:absolute; width: 2px; height: 45px; left: 22px; top: 25px; background:#dbeafe; transform: rotate(-12deg); transform-origin:top; }
-.clothing-person.rain ~ .clothing-umbrella { display:block; animation: umbrellaSway 2.2s ease-in-out infinite; }
-.clothing-sun { position:absolute; right: 2px; top: 2px; width: 19px; height:19px; border-radius:50%; background:#ffd166; box-shadow: 0 0 0 5px rgba(255,209,102,.12); }
-.clothing-rain { display:none; position:absolute; inset:0; background: repeating-linear-gradient(105deg, transparent 0 11px, rgba(126,197,255,.65) 12px 13px, transparent 14px 22px); animation: rainSlide .8s linear infinite; }
-.clothing-person.rain ~ .clothing-rain { display:block; }
-.clothing-cloud { position:absolute; left:2px; top:13px; width:34px; height:15px; border-radius:20px; background:rgba(184,204,226,.55); opacity:.5; }
-.clothing-cloud::before, .clothing-cloud::after { content:""; position:absolute; border-radius:50%; background:inherit; }
-.clothing-cloud::before { width:17px; height:17px; left:7px; top:-8px; }
-.clothing-cloud::after { width:12px; height:12px; left:19px; top:-4px; }
-.clothing-person.hot ~ .clothing-cloud { opacity:.15; }
-.clothing-person.cold ~ .clothing-cloud { opacity:.75; }
-.clothing-scarf { display:none; position:absolute; left:45px; bottom:30px; width:25px; height:7px; border-radius:6px; background:#ef4444; transform:rotate(8deg); transform-origin:left; }
-.clothing-person.cold ~ .clothing-scarf { display:block; animation: scarfWave 1.7s ease-in-out infinite; }
-.clothing-wind { position:absolute; width:25px; height:2px; border-radius:2px; background:rgba(126,197,255,.7); opacity:0; }
-.clothing-wind.w1 { left:0; top:43px; }
-.clothing-wind.w2 { left:10px; top:53px; width:18px; }
-.clothing-person.windy ~ .clothing-wind { opacity:1; animation: windSweep 1.5s ease-in-out infinite; }
-.clothing-person.windy ~ .clothing-wind.w2 { animation-delay:.32s; }
 .clothing-advice { min-width: 0; font-size: 13px; line-height: 1.55; }
 .clothing-advice b { color: var(--text); }
+.outfit-scene { width:min(104px,30%); height:auto; flex:none; }
+.outfit-drops { animation:outfitRain .95s linear infinite; }
+.outfit-snow { animation:outfitSnow 2.7s ease-in-out infinite; }
+.outfit-scarf { transform-box:fill-box; transform-origin:left center; animation:scarfWave 2.4s ease-in-out infinite; }
+.outfit-breeze { animation:outfitBreeze 1.6s ease-in-out infinite; }
+.outfit-person { transform-box:fill-box; transform-origin:center bottom; animation:outfitShift 3.2s ease-in-out infinite; }
+@keyframes outfitShift { 50% { transform:rotate(1.4deg) translateY(-.7px) } }
+@keyframes outfitRain { from { transform:translate(2px,-4px);opacity:.45 } to { transform:translate(-2px,4px);opacity:1 } }
+@keyframes outfitSnow { 50% { transform:translate(3px,4px);opacity:.65 } }
+@keyframes outfitBreeze { 50% { transform:translateX(4px);opacity:.5 } }
+@media (prefers-reduced-motion:reduce) { .outfit-scene * { animation:none !important; } }
 @keyframes personBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
 @keyframes umbrellaSway { 0%,100% { transform: rotate(-2deg); } 50% { transform: rotate(3deg); } }
 @keyframes rainSlide { to { transform: translateY(12px); } }
@@ -1828,7 +1812,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">31.99</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">32.00</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -3162,23 +3146,43 @@ body.loop-still .pill.bad {
     $("modelRetry").disabled = false;
   }
   function clothingGuide(w) {
-    const c = w && w.current || {}, h = w && w.hourly || {}, t = c.apparent_temperature != null ? c.apparent_temperature : c.temperature_2m;
+    const c = w && w.current || {}, h = w && w.hourly || {}, apparent=Number.isFinite(c.apparent_temperature),t=apparent?c.apparent_temperature:c.temperature_2m;
     if(insights.freshness(w).stale)return {cls:'',title:'穿衣建议待更新',advice:'天气数据缺失或过期，请更新后查看。',temp:null};
-    let pop = 0;
-    (h.time || []).forEach(function (iso, i) { const tm = weatherMs(iso, w); if (tm >= Date.now() && tm <= Date.now() + 6 * 3600000) pop = Math.max(pop, (h.precipitation_probability && h.precipitation_probability[i]) || 0); });
-    const rain = pop >= 45 || (c.weather_code >= 51 && c.weather_code <= 67) || (c.weather_code >= 80 && c.weather_code <= 82) || c.weather_code >= 95;
-    const cls = (rain ? "rain" : Number.isFinite(t) && t <= 10 ? "cold" : t >= 28 ? "hot" : "") + (c.wind_speed_10m >= 8 ? " windy" : "");
+    const now=Date.now(),code=c.weather_code,windy=Number.isFinite(c.wind_speed_10m)&&c.wind_speed_10m>=8;
+    const packRain=(h.time||[]).some((iso,i)=>{const tm=weatherMs(iso,w),p=h.precipitation_probability?.[i];return tm>now && tm-3600000<now+6*3600000 && Number.isFinite(p)&&p>=45&&p<=100;});
+    const thunder=[95,96,99].includes(code),snow=[71,73,75,77,85,86].includes(code);
+    const rain=[51,53,55,56,57,61,63,65,66,67,80,81,82].includes(code)||!snow&&Number.isFinite(c.precipitation)&&c.precipitation>0;
+    const cls=!Number.isFinite(t)?'unknown':t<=5?'winter':t<=12?'coat':t<=20?'jacket':t<=27?'shirt':'hot';
     let title = !Number.isFinite(t) ? "气温数据不足，暂不推荐衣物厚度" : t <= 5 ? "厚外套 + 保暖层" : t <= 12 ? "外套 + 长袖" : t <= 20 ? "薄外套较舒适" : t <= 27 ? "长袖或薄衫" : "轻薄透气衣物";
-    if (rain) title += " · 记得带伞";
-    const temperature=Number.isFinite(t)?Math.round(t)+'°C':'未知';
-    const advice = rain ? '有降雨信号，考虑防水鞋面；体感 '+temperature : '体感 '+temperature+'。按个人耐寒热程度调整；穿衣建议不代表户外活动安全。';
-    return { cls: cls, title: title, advice: advice, temp: Number.isFinite(t)?t:null };
+    const effect=thunder?'storm':snow?'snow':rain?'rain':packRain?'pack':'none';
+    const advice=({storm:'有雷暴信号，留意当地官方预警，穿衣不能消除雷暴风险。',snow:'有降雪信号，可配防水鞋和保暖手套。',rain:windy?'风雨同时出现，可选带帽防水外层。':'有降水信号，出门带伞或防水外层。',pack:'未来 6 小时有降水可能，可随身带折叠伞。',none:'按个人耐寒热程度调整。'})[effect];
+    return {cls,title,advice,temp:Number.isFinite(t)?t:null,basis:apparent?'体感':'气温',effect,windy,night:c.is_day===0};
+  }
+  function clothingScene(g){
+    if(!g.effect||g.cls==='unknown')return '';
+    const cold=g.cls==='winter'||g.cls==='coat',tee=g.cls==='hot';
+    const fabric=({winter:'#415984',coat:'#408481',jacket:'#bb6548',shirt:'#698eb8',hot:'#ed9f42'})[g.cls];
+    const wet=g.effect==='rain'||g.effect==='storm',hood=wet&&(g.windy||g.effect==='storm');
+    const rain=wet?'<path class="outfit-drops" d="m13 22-3 7m19-12-3 7m72 8-3 7m14-21-3 7M19 62l-3 7m89-10-3 7" stroke="#88bded" stroke-width="2.5"/>':'';
+    const snow=g.effect==='snow'?'<g class="outfit-snow" fill="#eef7ff"><circle cx="19" cy="22" r="2"/><circle cx="91" cy="31" r="3"/><circle cx="32" cy="48" r="2"/><circle cx="101" cy="63" r="2"/></g>':'';
+    const umbrella=g.effect==='rain'&&!hood?'<g stroke="#263b50" stroke-width="2"><path fill="#6ebfbe" d="M50 25Q72-7 99 22Q93 18 88 24Q80 19 74 25Q65 20 59 26Q55 22 50 25Z"/><path fill="none" d="m75 22 4 40q1 6-4 6"/></g>':'';
+    return '<svg class="outfit-scene" viewBox="0 0 116 104" aria-hidden="true"><rect x="1" y="1" width="114" height="102" rx="16" fill="'+(g.night?'#263751':'#bad4db')+'"/><path d="M2 80Q35 62 63 76T114 71v18q0 14-15 14H17Q2 103 2 88Z" fill="#729899"/><ellipse cx="56" cy="93" rx="23" ry="4" fill="#527573"/>'+rain+snow+
+      '<g class="outfit-person" stroke="#293849" stroke-linejoin="round" stroke-linecap="round" stroke-width="2"><path d="m45 68-2 21 8 1 6-19 3 19 8-1-2-21" fill="#304456"/><path d="m42 88-4 5h13v-5m9 0v5h13l-6-5" fill="#f3e0b8"/><path d="M44 43q10-6 22 0l10 19-7 4-4-10 2 '+(cold?'20':'14')+'q-12 4-24 0l2-'+(cold?'20':'14')+'-6 10-7-4Z" fill="'+(hood?'#dba84e':fabric)+'"/>'+
+      (tee?'<path d="m40 51-7 11 5 4 7-10m24-4 7 11-5 3-5-10" fill="#dbab88"/>':'<path d="M55 44v22m-11-5 7-1m8 0 6 1" fill="none"/>')+
+      '<circle cx="55" cy="32" r="11" fill="#e7b892"/><path d="M44 32q-4-16 13-14 11 1 10 13l-7-6q-3 7-16 7Z" fill="'+(hood?'#dba84e':'#493b40')+'"/><path d="M58 32h.2m-3 5q2 2 4 0" fill="none"/>'+
+      (cold?'<path class="outfit-scarf" d="M45 41q12 3 19-2l1 5-8 3 5 9-5 2-6-12-7-1Z" fill="#e47c69"/>':'')+
+      (g.effect==='pack'?'<path d="m67 57 6 13-5 3-6-14Z" fill="#7ed3cc"/>':'')+'</g>'+umbrella+
+      (g.windy?'<path class="outfit-breeze" d="M8 42h17m-13 6h8m66-7h16" fill="none" stroke="#eefaff" stroke-width="2" stroke-linecap="round"/>':'')+'</svg>';
   }
   function renderClothing(w) {
     const el = $("clothingCard");
-    if (!el || !w || !w.current) return;
+    if (!el) return;
+    if (!w?.current){el.hidden=true;el.textContent='';return;}
     const g = clothingGuide(w);
-    el.hidden = false; el.innerHTML = '<div class="clothing-head"><strong>穿衣指南 · 动态建议</strong><small>' + (g.temp == null ? "—" : Math.round(g.temp) + "°C 体感") + '</small></div><div class="clothing-body"><div class="clothing-scene"><div class="clothing-sun"></div><div class="clothing-cloud"></div><div class="clothing-person ' + g.cls + '"><div class="clothing-coat"></div></div><div class="clothing-scarf"></div><div class="clothing-umbrella"></div><div class="clothing-rain"></div><div class="clothing-wind w1"></div><div class="clothing-wind w2"></div></div><div class="clothing-advice"><b>' + g.title + '</b><br>' + g.advice + '</div></div>';
+    el.hidden=false;
+    const city=state.city?.name||'所选城市',value=g.temp==null?'温度待确认':Math.round(g.temp)+'°C '+g.basis;
+    const html='<div class="clothing-head"><strong>'+escapeCityText(city)+' · 穿衣指南</strong><small>'+value+'</small></div><div class="clothing-body">'+clothingScene(g)+'<div class="clothing-advice"><b>'+g.title+'</b><br>'+g.advice+'</div></div>';
+    if(el._outfitHtml!==html||!el.firstChild){el.innerHTML=html;el._outfitHtml=html;}
   }
   function forecastTimeLabel(iso) {
     const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
@@ -6744,6 +6748,7 @@ body.loop-still .pill.bad {
     updateWeatherStamp(state.weather, state.weatherCached, state.weatherLoading);
     renderNext2Hours(state.weather);
     renderExtremeAlert(state.weather || {});
+    renderClothing(state.weather);
     renderOutdoor();
   }
   window.addEventListener('offline', refreshTimeSensitiveCards);
