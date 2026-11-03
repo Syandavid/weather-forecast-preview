@@ -4543,7 +4543,9 @@ body.loop-still .pill.bad {
       if (!from || !to) throw new Error("地点未找到");
       stage = '出发地时区查询';
       status.textContent = '已识别：' + from.name + '（' + (from.admin || '地图点') + '） → ' + to.name + '（' + (to.admin || '地图点') + '）';
-      if (!from.timezone) {
+      // "Now" is an absolute instant. A station without zone metadata should
+      // not require a separate forecast request before roads can be shown.
+      if (enteredTime && !from.timezone) {
         const zoneData = await getJson('https://api.open-meteo.com/v1/forecast?latitude=' + from.lat + '&longitude=' + from.lon + '&timezone=auto&current=temperature_2m&forecast_days=1');
         from.timezone = zoneData.timezone;
       }
@@ -4586,6 +4588,8 @@ body.loop-still .pill.bad {
         weather = samples.map(s => Object.assign({point:s.point,arrival:when+s.elapsedSeconds*1000,etaMethod:s.etaMethod},window.RouteWeather.weather({},when,weatherMs),{reason:'天气服务暂不可用，请稍后重新查询'}));
       }
       if (requestId !== state.routeRequest) return;
+      if (!from.timezone && weather[0]?.timezone) from.timezone = weather[0].timezone;
+      $('routeZone').textContent = (from.timezone ? '出发地时区：' + from.timezone : '出发地时区未知，出发时间以 UTC 显示') + ' · 行程耗时不包含实时拥堵';
       state.routeWeatherLayer = L.layerGroup();
       weather.forEach(function (w, i) {
         const color = routeWeatherColor(w);
@@ -4602,7 +4606,7 @@ body.loop-still .pill.bad {
         '<br>' + escapeCityText(samples[0].etaMethod) + ' · 灰色：数据不足；绿色仅表示未触发所设阈值，不保证道路安全。' +
         '<div class="route-weather">' + weather.map((w,i)=>'<details class="route-weather-chip"><summary><i style="width:8px;height:8px;border-radius:50%;background:' + routeWeatherColor(w) + ';display:inline-block"></i>路线点 ' + (i+1) + ' · ' + (w.complete ? '查看到达时天气' : escapeCityText(w.reason)) + '</summary>' + routeWeatherDescription(w) + '</details>').join('') + '</div>';
     } catch (e) {
-      if (requestId === state.routeRequest && status) status.textContent = stage + '失败：' + (e.userMessage || (stage === '道路规划' ? '道路服务暂不可达或没有连通的驾车道路，请稍后重试；这不代表地点名称错误。' : '服务暂时不可用，请稍后重试。'));
+      if (requestId === state.routeRequest && status) status.textContent = stage + '失败：' + (e.userMessage || (stage === '道路规划' ? '道路服务暂不可达或没有连通的驾车道路，请稍后重试；这不代表地点名称错误。' : '服务暂时不可用，请稍后重试。')) + '（路线版 31.56）';
     } finally {
       searchButton.disabled = false;
       searchButton.textContent = '查询路线天气';
