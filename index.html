@@ -1823,7 +1823,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">31.86</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">31.87</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -3942,6 +3942,7 @@ body.loop-still .pill.bad {
       return;
     }
     const idx = Math.max(0, Math.min(n - 1, state.radarIdx));
+    drawSolarTerminator(frames[idx]);
     ticks.setAttribute('aria-valuemin', '0');
     ticks.setAttribute('aria-valuemax', String(n-1));
     ticks.setAttribute('aria-valuenow', String(idx));
@@ -4034,7 +4035,7 @@ body.loop-still .pill.bad {
         (state.sat3dMap?.getZoom ? ' · 缩放 '+state.sat3dMap.getZoom().toFixed(1)+'级' : '');
       return;
     }
-    const solarHint = " · 晨昏线已显示";
+    const solarHint = " · 晨昏线按所选时刻计算";
     if (state.satLayer === "city" || state.satLayer === "infrared" || state.satLayer === "truecolor") {
       const future = playheadIsFuture();
       if (future) {
@@ -4797,13 +4798,20 @@ body.loop-still .pill.bad {
     const cap = decl >= 0 ? [[-89.8, 180], [-89.8, -180]] : [[89.8, 180], [89.8, -180]];
     return { line: line, night: line.concat(cap) };
   }
-  function drawSolarTerminator() {
+  function drawSolarTerminator(frame) {
     if (!state.satMap || !window.L) return;
-    const geo = solarGeometry(new Date());
-    if (state.satSolarLayer) { state.satMap.removeLayer(state.satSolarLayer); state.satSolarLayer = null; }
+    frame=frame||playheadFrame();
+    const time=frame && frame.kind!=='now' && Number.isFinite(frame.time)?frame.time*1000:Date.now();
+    const minute=Math.floor(time/60000);
+    if(state.satSolarLayer && state.satSolarMinute===minute)return;
+    const geo=solarGeometry(new Date(minute*60000));
+    state.satSolarMinute=minute;
+    if(state.satSolarLayer){
+      state.satSolarNight.setLatLngs(geo.night);state.satSolarLine.setLatLngs(geo.line);return;
+    }
     state.satSolarLayer = L.layerGroup();
-    L.polygon(geo.night, { pane: "solarPane", className: "solar-night", fillColor: "#02091a", fillOpacity: 0.32, stroke: false, interactive: false }).addTo(state.satSolarLayer);
-    L.polyline(geo.line, { pane: "solarPane", className: "solar-line", color: "#ffe08a", weight: 2, opacity: 0.9, interactive: false }).addTo(state.satSolarLayer);
+    state.satSolarNight=L.polygon(geo.night, { pane: "solarPane", className: "solar-night", fillColor: "#02091a", fillOpacity: 0.32, stroke: false, interactive: false }).addTo(state.satSolarLayer);
+    state.satSolarLine=L.polyline(geo.line, { pane: "solarPane", className: "solar-line", color: "#ffe08a", weight: 2, opacity: 0.9, interactive: false }).addTo(state.satSolarLayer);
     state.satSolarLayer.addTo(state.satMap);
   }
   function solarGeoJson() {
