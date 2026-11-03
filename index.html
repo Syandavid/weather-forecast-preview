@@ -443,7 +443,7 @@ button { color: inherit; }
 .route-pin { display:grid; place-items:center; width:24px; height:24px; border-radius:50%; border:2px solid #fff; color:#fff; font-size:10px; font-weight:750; box-shadow:0 2px 10px rgba(0,0,0,.4); }
 .route-start { background:#16a34a; }
 .route-end { background:#dc2626; }
-.traffic-signal { width:15px; height:15px; border-radius:50%; background:#ff5264; border:2px solid #fff; box-shadow:0 0 0 3px rgba(255,82,100,.2); }
+.traffic-signal { display:block;width:10px;height:18px;box-sizing:border-box;border-radius:4px;border:1px solid #fff;background:radial-gradient(circle at 50% 23%,#ecf4ff 1.4px,transparent 1.8px),radial-gradient(circle at 50% 50%,#ecf4ff 1.4px,transparent 1.8px),radial-gradient(circle at 50% 77%,#ecf4ff 1.4px,transparent 1.8px),#203244; }
 .road-detail { stroke-linecap:round; stroke-linejoin:round; }
 .road-national { color:#ffca66; }
 .road-provincial { color:#a78bfa; }
@@ -1679,10 +1679,11 @@ body.loop-still .pill.bad {
               <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M12 10c6-1 8-5 7-8M12 14c-6 1-8 5-7 8M10 12c-1-6-5-8-8-7M14 12c1 6 5 8 8 7"/></svg>
               <span>台风</span><span class="ck">✓</span>
             </button>
-            <button class="sat-ly on" data-overlay="traffic" type="button">
+            <button class="sat-ly" data-overlay="traffic" type="button" aria-pressed="false">
               <svg viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="18" rx="3"/><circle cx="12" cy="7" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="17" r="1.4" fill="currentColor" stroke="none"/></svg>
-              <span>红绿灯点位</span><span class="ck">✓</span>
+              <span>红绿灯点位</span><span class="ck"></span>
             </button>
+            <div class="china-range-note" id="trafficStatus" role="status">点位层已关闭 · 不提供实时灯色</div>
             <div class="sat-rail-bases">
               <button class="sat-bm" data-base="truecolor" type="button">真实色</button>
               <button class="sat-bm" data-base="infrared" type="button">红外</button>
@@ -1812,7 +1813,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">32.01</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">32.02</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -1859,7 +1860,7 @@ body.loop-still .pill.bad {
   const ESRI_IMAGERY = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
   const ESRI_ROADS = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}";
   const ESRI_PLACES = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
-  const OVERPASS_URLS = ["https://overpass-api.de/api/interpreter?data=", "https://overpass.kumi.systems/api/interpreter?data="];
+  const OVERPASS_URLS = ["https://overpass-api.de/api/interpreter?data=", "https://overpass.private.coffee/api/interpreter?data="];
   const OSRM_URL = "https://router.project-osrm.org/route/v1/driving/";
   const MAPLIBRE_STYLE = "https://tiles.openfreemap.org/styles/liberty";
   const MAPLIBRE_TERRAIN = "https://tiles.mapterhorn.com/tilejson.json";
@@ -1889,7 +1890,7 @@ body.loop-still .pill.bad {
     source: "",
     tab: "weather",
     satLayer: "city",
-    overlays: { radar: true, precip: false, cloud: true, wind: false, humidity: false, pressure: false, typhoon: true },
+    overlays: { radar: true, precip: false, cloud: true, wind: false, humidity: false, pressure: false, typhoon: true, traffic:false },
     satRadarLayer: null,
     satPrecipLayer: null,
     precipFrames: [],
@@ -2574,6 +2575,7 @@ body.loop-still .pill.bad {
     syncMotion();
     scheduleRoadDetails();
     scheduleBoundaryDetails();
+    scheduleTrafficSignals();
     if (id === "sat") {
       if (state.satMap) refreshVisibleRadar(false);
       if (state.satView !== "pro") ensureSatMap().then(function () { if (state.pendingMapCity) focusSelectedMap(); maybeAutoplayRadar(); });
@@ -4517,33 +4519,63 @@ body.loop-still .pill.bad {
   function clearTrafficSignals() {
     if (state.trafficLayer && state.satMap) state.satMap.removeLayer(state.trafficLayer);
     state.trafficLayer = null;
+    for(const marker of state.signalMarkers3d||[])marker.remove();
+    state.signalMarkers3d=[];
   }
+  function trafficStatus(msg){const el=$('trafficStatus');if(el)el.textContent=msg;}
   function scheduleTrafficSignals() {
     if (state.trafficTimer) clearTimeout(state.trafficTimer);
+    ++state.trafficRequest;
+    state.trafficAbort?.abort();state.trafficAbort=null;
+    clearTrafficSignals();
+    if(!ov('traffic')){trafficStatus('点位层已关闭 · 不提供实时灯色');return;}
+    if(document.hidden||state.tab!=='sat'||state.satView==='pro')return;
+    trafficStatus('正在检查视野 · 非实时灯色');
     state.trafficTimer = setTimeout(function () { loadTrafficSignals(); }, 850);
   }
   async function loadTrafficSignals() {
-    if (!state.satMap || !window.L || !ov("traffic")) { clearTrafficSignals(); return; }
-    const z = state.satMap.getZoom();
-    if (z < 12) { clearTrafficSignals(); return; }
-    const b = state.satMap.getBounds();
-    const south = Math.max(-85, b.getSouth()), west = Math.max(-180, b.getWest());
-    const north = Math.min(85, b.getNorth()), east = Math.min(180, b.getEast());
-    if (north - south > 0.8 || east - west > 1.2) { clearTrafficSignals(); return; }
+    const is3d=state.satView==='3d',map=is3d?state.sat3dMap:state.satMap;
+    if(!map||!ov('traffic')||document.hidden||state.tab!=='sat'||state.satView==='pro')return;
+    if(map.getZoom()<12){trafficStatus('放大至 12 级后显示信号灯位置');return;}
+    const b=map.getBounds(),south=Math.max(-85,b.getSouth()),north=Math.min(85,b.getNorth());
+    const west=((b.getWest()+180)%360+360)%360-180,span=b.getEast()-b.getWest(),east=west+(span<0?span+360:span);
+    if(north<=south||east<=west||north-south>.8||east-west>1.2){trafficStatus('视野过大，请继续放大查看信号灯位置');return;}
     const requestId = ++state.trafficRequest;
-    const q = "[out:json][timeout:10];node[highway=traffic_signals](" + south.toFixed(5) + "," + west.toFixed(5) + "," + north.toFixed(5) + "," + east.toFixed(5) + ");out;";
+    const parts=east>180?[[west,180],[-180,east-360]]:[[west,east]];
+    const q='[out:json][timeout:10];('+parts.map(([w,e])=>'node[highway=traffic_signals]('+[south,w,north,e].map(x=>x.toFixed(5)).join(',')+');').join('')+');out 901;';
+    const ctl=state.trafficAbort=new AbortController(),deadline=setTimeout(()=>ctl.abort(),12500);
+    trafficStatus('正在读取当前视野的 OSM 信号灯位置…');
     try {
-      const data = await getOverpass(q);
-      if (requestId !== state.trafficRequest || !state.satMap) return;
-      clearTrafficSignals();
-      const group = L.layerGroup();
-      (data.elements || []).slice(0, 900).forEach(function (node) {
-        if (node.lat == null || node.lon == null) return;
-        const icon = L.divIcon({ className: "traffic-icon", html: '<span class="traffic-signal"></span>', iconSize: [19, 19], iconAnchor: [9, 9] });
-        L.marker([node.lat, node.lon], { icon: icon, interactive: false, keyboard: false, pane: "tyDotPane" }).bindTooltip("红绿灯点位", { direction: "top", offset: [0, -8] }).addTo(group);
-      });
-      state.trafficLayer = group.addTo(state.satMap);
-    } catch (e) {}
+      const cacheHit=state.signalCache?.q===q && Date.now()-state.signalCache.at>=0 && Date.now()-state.signalCache.at<300000;
+      if(!cacheHit && Date.now()<state.signalRetryAt){trafficStatus('信号灯服务限流，请稍后查看 · 非实时灯色');return;}
+      const data=cacheHit?state.signalCache.data:await getOverpass(q,{signal:ctl.signal,timeoutMs:6000});
+      if(requestId!==state.trafficRequest||ctl.signal.aborted)return;
+      if(data?.remark||!Array.isArray(data?.elements))throw Error('Incomplete inventory');
+      const valid=data.elements.filter(n=>n?.type==='node'&&n.tags?.highway==='traffic_signals'&&Number.isFinite(n.lat)&&Math.abs(n.lat)<=90&&Number.isFinite(n.lon)&&Math.abs(n.lon)<=180);
+      if(valid.length!==data.elements.length)throw Error('Malformed traffic signal');
+      if(!cacheHit)state.signalCache={q,at:Date.now(),data};
+      // Bound DOM work and avoid drawing a wall of icons at city zoom.
+      const occupied=new Set(),nodes=[];
+      const spacing=map.getZoom()<14?44:22;
+      for(const n of valid){
+        const p=is3d?map.project([n.lon,n.lat]):map.latLngToContainerPoint([n.lat,n.lon]);
+        const cell=Math.floor(p.x/spacing)+':'+Math.floor(p.y/spacing);
+        if(!occupied.has(cell)){occupied.add(cell);nodes.push(n);}
+        if(nodes.length===160)break;
+      }
+      if(is3d){
+        state.signalMarkers3d=nodes.map(n=>{
+          const el=document.createElement('span');el.className='traffic-signal';el.style.pointerEvents='none';el.setAttribute('aria-hidden','true');
+          return new maplibregl.Marker({element:el,anchor:'center'}).setLngLat([n.lon,n.lat]).addTo(map);
+        });
+      }else{
+        const group=L.layerGroup(),icon=L.divIcon({className:'traffic-icon',html:'<span class="traffic-signal"></span>',iconSize:[10,18],iconAnchor:[5,9]});
+        for(const n of nodes)L.marker([n.lat,n.lon],{icon,interactive:false,keyboard:false,pane:'signalPane'}).addTo(group);
+        state.trafficLayer=group.addTo(map);
+      }
+      trafficStatus(nodes.length?'显示 '+nodes.length+' 个 OSM 点位'+(valid.length>nodes.length?'（密集处仅显示部分，可放大）':'')+' · 非实时灯色':'本视野未返回 OSM 点位，不代表没有信号灯');
+    }catch(e){if(requestId===state.trafficRequest){if(e.httpStatus===429)state.signalRetryAt=Date.now()+60000;trafficStatus('信号灯资料暂不可用，不代表没有信号灯');}}
+    finally{clearTimeout(deadline);if(state.trafficAbort===ctl)state.trafficAbort=null;}
   }
   function setRoadOption(kind, on) {
     if (!state.roadClasses || !Object.prototype.hasOwnProperty.call(state.roadClasses, kind)) return;
@@ -5089,6 +5121,7 @@ body.loop-still .pill.bad {
       }
     });
     map.on('moveend', scheduleRoadDetails);
+    map.on('moveend', scheduleTrafficSignals);
     return await state.sat3dReady;
   }
   async function loadSatCityWx() {
@@ -5498,6 +5531,7 @@ body.loop-still .pill.bad {
     pane("cityPane", 440, "none");
     pane("cityWeatherPane", 447, "none");
     pane("labelPane", 445, "none");
+    pane("signalPane",446,"none");
     pane("routePathPane", 448, "none");
     pane("chinaRangePane", 456, "none");
     pane("tyFillPane", 450, "none");
@@ -6582,6 +6616,8 @@ body.loop-still .pill.bad {
             loadMetGrid(false);
             updatePlayhead();
           });
+        } else if(k==='traffic'){
+          b.setAttribute('aria-pressed',String(ov('traffic')));scheduleTrafficSignals();
         } else if (k === "typhoon") {
           drawSatTracks();
         } else {
@@ -6780,6 +6816,7 @@ body.loop-still .pill.bad {
   document.addEventListener('visibilitychange',resumeStormCheck);
   window.addEventListener('pageshow',resumeStormCheck);
   document.addEventListener('visibilitychange', scheduleRoadDetails);
+  document.addEventListener('visibilitychange', scheduleTrafficSignals);
   document.addEventListener('visibilitychange', () => refreshVisibleRadar(false));
   function refreshTimeSensitiveCards() {
     if (document.hidden) return;
