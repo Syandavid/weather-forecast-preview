@@ -1829,7 +1829,7 @@ body.loop-still .pill.bad {
 </div>
 <script src="assets/weather-insights.js?v=31.47"></script>
 <script src="assets/route-weather.js?v=31.54"></script>
-<script src="assets/storm-quality.js?v=31.48"></script>
+<script src="assets/storm-quality.js?v=31.55"></script>
 <script src="assets/map-weather.js?v=27.1"></script>
 <script src="assets/pro-weather.js?v=28"></script>
 <script src="assets/city-search.js?v=31.32"></script>
@@ -3372,8 +3372,9 @@ body.loop-still .pill.bad {
     const nhcLive = [];
     let cmaOk = false, nhcOk = false, cmaActiveIds = null;
     let snap = null;
+    const snapshotPath = "https://syandavid.github.io/weather-forecast/data/typhoons.json";
     try { await Promise.all([
-      (async()=>{try { snap = await getJson("./data/typhoons.json", options); } catch (e) { snap = null; }})(),
+      (async()=>{try { snap = window.StormQuality.normalizeSnapshot(await getJson(snapshotPath, options)); } catch (e) { snap = null; }})(),
       (async()=>{try {
       const listTxt = await getText("https://typhoon.nmc.cn/weatherservice/typhoon/jsons/list_default", options);
       const list = unwrapJson(listTxt);

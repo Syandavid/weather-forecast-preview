@@ -1,6 +1,17 @@
 (function(root){
   'use strict';
   function age(stamp,now){const t=Date.parse(stamp);return Number.isFinite(t)?(now-t)/3600000:Infinity;}
+  function normalizeSnapshot(raw){
+    if(!raw||!Array.isArray(raw.storms)||!Array.isArray(raw.errors))return null;
+    if(raw.storms.some(s=>!s||typeof s!=='object'))return null;
+    if(raw.providerStatus&&raw.providerUpdated)return raw;
+    // Older published files have no independent verified inventory per source.
+    // Use dated, observed positives only; an empty legacy file is not an all-clear.
+    if(!Array.isArray(raw.sources)||!Number.isFinite(Date.parse(raw.updated)))return null;
+    const status={};
+    for(const p of ['CMA','NHC'])status[p]=raw.sources.includes(p)&&!raw.errors.some(e=>String(e).startsWith(p))?'partial':'unavailable';
+    return {...raw,providerStatus:status,providerUpdated:{CMA:raw.updated,NHC:raw.updated}};
+  }
   function forecastPoints(storm,now=Date.now()){
     const points=[];let rejected=0;
     for(const p of Array.isArray(storm.forecast)?storm.forecast:[]){
@@ -62,5 +73,5 @@
     return {storms,notes,status,complete:Object.values(status).every(s=>s==='live'||s==='snapshot')};
   }
   const coverageNote='台风资料源为 CMA / NHC，尚非全球所有洋区完整覆盖；未接入或缺失资料不能理解为没有台风。';
-  root.StormQuality={merge,age,forecastPoints,coverageNote};
+  root.StormQuality={merge,age,forecastPoints,coverageNote,normalizeSnapshot};
 })(typeof window!=='undefined'?window:globalThis);
