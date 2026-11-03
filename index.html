@@ -434,6 +434,9 @@ button { color: inherit; }
 .sat-route-status strong { color:var(--text); }
 .sat-route-status .route-weather { display:grid; gap:4px; margin-top:6px; }
 .route-weather-chip { display:flex; align-items:center; gap:6px; padding:5px 6px; border-radius:7px; background:rgba(255,255,255,.055); }
+.route-point-focus { min-height:44px; margin-top:6px; color:var(--text); background:transparent; border:1px solid currentColor; border-radius:8px; padding:4px 10px; cursor:pointer; }
+.route-number-pin { display:grid; place-items:center; }
+.route-number-pin b { display:grid; place-items:center; min-width:25px; height:25px; border-radius:50%; background:#10202e; color:white; border:3px solid var(--route-risk); box-shadow:0 1px 4px #000; }
 .route-pin { display:grid; place-items:center; width:24px; height:24px; border-radius:50%; border:2px solid #fff; color:#fff; font-size:10px; font-weight:750; box-shadow:0 2px 10px rgba(0,0,0,.4); }
 .route-start { background:#16a34a; }
 .route-end { background:#dc2626; }
@@ -1823,7 +1826,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">31.87</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">31.88</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -4670,13 +4673,28 @@ body.loop-still .pill.bad {
   function drawRouteWeatherPoints(requestId,weather) {
     if(requestId!==state.routeRequest || state.tab!=='sat' || state.satView!=='2d' || !state.satMap || !state.routeLayer)return false;
     state.routeWeatherLayer = L.layerGroup();
+    const markers=[];
     weather.forEach(function (w, i) {
       const color = routeWeatherColor(w);
-      const marker = L.circleMarker([w.point[1], w.point[0]], { pane: "tyMarkPane", radius: 7, color: "#fff", weight: 2, fillColor: color, fillOpacity: .95, interactive: true });
+      const title='路线点 '+(i+1)+(i===0?'（起点）':i===weather.length-1?'（终点）':'');
+      const icon=L.divIcon({className:'route-number-pin',html:'<b style="--route-risk:'+color+'">'+(i+1)+'</b>',iconSize:[44,44],iconAnchor:[22,22]});
+      const marker=L.marker([w.point[1],w.point[0]],{icon,title,alt:title,zIndexOffset:1000});
       marker.bindPopup('路线点 ' + (i+1) + '<br>' + routeWeatherDescription(w));
       marker.addTo(state.routeWeatherLayer);
+      markers.push(marker);
     });
     state.routeWeatherLayer.addTo(state.satMap);
+    for(const button of $('routeStatus')?.querySelectorAll?.('[data-route-point]')||[]){
+      const marker=markers[Number(button.dataset.routePoint)];if(!marker)continue;
+      button.hidden=false;
+      button.onclick=()=>{
+        if(requestId!==state.routeRequest||state.tab!=='sat'||state.satView!=='2d'||!state.satMap?.hasLayer(marker))return;
+        state.routeMode=false;syncRouteMode();
+        state.satMap.setView(marker.getLatLng(),Math.max(12,state.satMap.getZoom()),{animate:false});
+        marker.openPopup();
+        marker.getElement()?.focus({preventScroll:true});
+      };
+    }
     return true;
   }
   async function queryRoute() {
@@ -4750,7 +4768,7 @@ body.loop-still .pill.bad {
         '<br>地点：' + escapeCityText(from.source || '地图选点') + ' / ' + escapeCityText(to.source || '地图选点') + ' · 道路：OSRM / OpenStreetMap（非铁路、非实时导航）' +
         '<br><span id="routeMapNote">' + (state.satMap ? '正在标注地图…' : '地图未就绪，可先查看下方路线点。') + '</span>' +
         '<br>' + escapeCityText(samples[0].etaMethod) + ' · 灰色：数据不足；绿色仅表示未触发所设阈值，不保证道路安全。' +
-        '<div class="route-weather">' + weather.map((w,i)=>'<details class="route-weather-chip"><summary><i style="width:8px;height:8px;border-radius:50%;background:' + routeWeatherColor(w) + ';display:inline-block"></i>路线点 ' + (i+1) + ' · ' + (w.complete ? '查看到达时天气' : escapeCityText(w.reason)) + '</summary>' + routeWeatherDescription(w) + '</details>').join('') + '</div>';
+        '<div class="route-weather">' + weather.map((w,i)=>'<details class="route-weather-chip"><summary><i style="width:8px;height:8px;border-radius:50%;background:' + routeWeatherColor(w) + ';display:inline-block"></i>路线点 ' + (i+1) + ' · ' + (w.complete ? '查看到达时天气' : escapeCityText(w.reason)) + '</summary>' + routeWeatherDescription(w) + '<br><button type="button" class="route-point-focus" hidden data-route-point="'+i+'">在地图查看路线点 '+(i+1)+'</button></details>').join('') + '</div>';
       // Map rendering is optional. A slow CDN, failed tile engine or stale
       // callback must never hide a usable itinerary or lock the query form.
       roadDrawn.then(drawn=>drawn && drawRouteWeatherPoints(requestId,weather)).catch(()=>false).then(drawn=>{
