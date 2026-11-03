@@ -1828,7 +1828,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">31.98</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">31.99</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -2731,7 +2731,7 @@ body.loop-still .pill.bad {
     }
     return '';
   }
-  function historyValue(arr, i, fallback) {
+  function historyValue(arr, i) {
     return arr && Number.isFinite(arr[i]) ? arr[i] : null;
   }
   async function loadHistoryRange(start, end, startTime, endTime, custom) {
@@ -2837,6 +2837,12 @@ body.loop-still .pill.bad {
   function trendSeries() {
     const out = [];
     const range = state.historyRange || {};
+    const nonNegative=(arr,i)=>Number.isFinite(arr?.[i])&&arr[i]>=0?arr[i]:null;
+    const validStamp=(s,hourly)=>{
+      if(typeof s!=='string'||!(hourly?/^\d{4}-\d\d-\d\dT\d\d:\d\d$/:/^\d{4}-\d\d-\d\d$/).test(s))return false;
+      const t=Date.parse(s+(hourly?'Z':'T00:00Z'));
+      return Number.isFinite(t)&&new Date(t).toISOString().slice(0,hourly?16:10)===s;
+    };
     if (state.trendGranularity === "hourly") {
       const begin = range.start ? range.start + " " + (range.startTime || "00:00") : "";
       const finish = range.end ? range.end + " " + (range.endTime || "23:00") : "";
@@ -2847,36 +2853,52 @@ body.loop-still .pill.bad {
       const h = state.history && state.history.hourly;
       if (h && h.time) {
         h.time.forEach(function (iso, i) {
-          if (!inRange(iso)) return;
-          out.push({ date: iso, kind: "past", code: historyValue(h.weather_code, i, 0), high: historyValue(h.temperature_2m, i, null), low: null, rain: historyValue(h.precipitation, i, 0), wind: historyValue(h.wind_speed_10m, i, null), gust: historyValue(h.wind_gusts_10m, i, null) });
+          if (!validStamp(iso,true)||!inRange(iso)) return;
+          out.push({ date: iso, kind: "past", code: historyValue(h.weather_code, i), high: historyValue(h.temperature_2m, i), low: null, rain: nonNegative(h.precipitation, i), wind: nonNegative(h.wind_speed_10m, i), gust: nonNegative(h.wind_gusts_10m, i) });
         });
       }
       const fw = state.weather && state.weather.hourly;
       if (!range.custom && fw && fw.time) {
         fw.time.forEach(function (iso, i) {
+          if(!validStamp(iso,true))return;
           const stamp = weatherMs(iso, state.weather);
           if (!Number.isFinite(stamp) || stamp < Date.now() - 30 * 60000) return;
           if (out.some(function (x) { return x.date === iso; })) return;
-          out.push({ date: iso, kind: "future", code: historyValue(fw.weather_code, i, 0), high: historyValue(fw.temperature_2m, i, null), low: null, rain: historyValue(fw.precipitation, i, 0), wind: historyValue(fw.wind_speed_10m, i, null), gust: historyValue(fw.wind_gusts_10m, i, null) });
+          out.push({ date: iso, kind: "future", code: historyValue(fw.weather_code, i), high: historyValue(fw.temperature_2m, i), low: null, rain: nonNegative(fw.precipitation, i), wind: nonNegative(fw.wind_speed_10m, i), gust: nonNegative(fw.wind_gusts_10m, i) });
         });
       }
-      return out;
+      return out.sort((a,b)=>a.date.localeCompare(b.date));
     }
     const h = state.history && state.history.daily;
     if (h && h.time) {
       h.time.forEach(function (iso, i) {
-        if ((range.start && iso < range.start) || (range.end && iso > range.end)) return;
-        out.push({ date: iso, kind: "past", code: historyValue(h.weather_code, i, 0), high: historyValue(h.temperature_2m_max, i, null), low: historyValue(h.temperature_2m_min, i, null), rain: historyValue(h.precipitation_sum, i, 0), wind: historyValue(h.wind_speed_10m_max, i, null) });
+        if (!validStamp(iso,false)||(range.start && iso < range.start) || (range.end && iso > range.end)) return;
+        out.push({ date: iso, kind: "past", code: historyValue(h.weather_code, i), high: historyValue(h.temperature_2m_max, i), low: historyValue(h.temperature_2m_min, i), rain: nonNegative(h.precipitation_sum, i), wind: nonNegative(h.wind_speed_10m_max, i) });
       });
     }
     const d = state.weather && state.weather.daily;
     if (!range.custom && d && d.time) {
       d.time.forEach(function (iso, i) {
+        if(!validStamp(iso,false))return;
         if (out.some(function (x) { return x.date === iso; })) return;
-        out.push({ date: iso, kind: "future", code: historyValue(d.weather_code, i, 0), high: historyValue(d.temperature_2m_max, i, null), low: historyValue(d.temperature_2m_min, i, null), rain: historyValue(d.precipitation_sum, i, 0), wind: historyValue(d.wind_speed_10m_max, i, null) });
+        out.push({ date: iso, kind: "future", code: historyValue(d.weather_code, i), high: historyValue(d.temperature_2m_max, i), low: historyValue(d.temperature_2m_min, i), rain: nonNegative(d.precipitation_sum, i), wind: nonNegative(d.wind_speed_10m_max, i) });
       });
     }
-    return out;
+    out.sort((a,b)=>a.date.localeCompare(b.date));
+    // An omitted calendar day is selectable, but never supplies a weather
+    // value. Keep whole-request failure/empty states distinct from gaps.
+    if(!out.length)return out;
+    const dates=new Map(out.map(s=>[s.date,s]));
+    const start=validStamp(range.start,false)&&state.historyStatus==='ready'?range.start:out[0].date;
+    const end=range.custom&&validStamp(range.end,false)?range.end:out.at(-1).date;
+    const first=Date.parse(start+'T00:00Z'),last=Date.parse(end+'T00:00Z');
+    if(last<first||last-first>366*86400000)return out;
+    const days=[],firstForecast=out.find(s=>s.kind==='future')?.date;
+    for(let t=first;t<=last;t+=86400000){
+      const date=new Date(t).toISOString().slice(0,10);
+      days.push(dates.get(date)||{date,kind:firstForecast&&date>=firstForecast?'future':'past',missing:true});
+    }
+    return days;
   }
   function trendLabel(iso) {
     if (!iso) return "";
@@ -2886,11 +2908,12 @@ body.loop-still .pill.bad {
   function trendSelectionText(s, mode) {
     if (!s) return "拖动图中的竖线，查看对应日期或时刻";
     const when = state.trendGranularity === "hourly" ? trendLabel(s.date) : s.date;
+    if(s.missing)return when+' · 该日没有记录';
     const deg=v=>Number.isFinite(v)?Math.round(v)+'°C':'—';
     const vals = mode === "temp"
       ? (state.trendGranularity==='hourly'?deg(s.high):'最高 '+deg(s.high)+' · 最低 '+deg(s.low))
-      : mode === "rain" ? ((s.rain == null ? "—" : s.rain.toFixed(1) + " mm"))
-      : (s.wind == null ? "—" : s.wind.toFixed(1) + " m/s");
+      : mode === "rain" ? ((s.rain == null ? "降水缺测" : s.rain.toFixed(1) + " mm"))
+      : (s.wind == null ? "风速缺测" : s.wind.toFixed(1) + " m/s");
     return (s.kind === "past" ? "历史" : "预报") + " · " + when + " · " + vals;
   }
   function bindTrendCursor(svg, series, x, W, pad, mode) {
@@ -2970,9 +2993,9 @@ body.loop-still .pill.bad {
       return;
     }
     let min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
-    if (mode === "rain") min = 0;
+    if (mode !== "temp") min = 0;
     const gap = Math.max(1, (max - min) * 0.16);
-    min -= mode === "rain" ? 0 : gap; max += gap;
+    min -= mode !== "temp" ? 0 : gap; max += gap;
     if (Math.abs(max - min) < 0.01) max = min + 1;
     const stamps=series.map(s=>Date.parse(s.date.length===10?s.date+'T00:00:00Z':s.date+'Z'));
     const duration=Math.max(1,stamps[stamps.length-1]-stamps[0]);
