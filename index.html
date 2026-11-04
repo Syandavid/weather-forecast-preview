@@ -1834,7 +1834,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">32.11</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">32.12</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -1853,7 +1853,7 @@ body.loop-still .pill.bad {
 <script src="assets/weather-insights.js?v=31.98"></script>
 <script src="assets/route-weather.js?v=31.54"></script>
 <script src="assets/storm-quality.js?v=32.05"></script>
-<script src="assets/official-alerts.js?v=32.11"></script>
+<script src="assets/official-alerts.js?v=32.12"></script>
 <script src="assets/map-weather.js?v=27.1"></script>
 <script src="assets/pro-weather.js?v=28"></script>
 <script src="assets/city-search.js?v=31.32"></script>
@@ -3676,7 +3676,8 @@ body.loop-still .pill.bad {
     if(!supported)body='<p>所选地点尚未接入官方预警；不能据此判断没有预警。下方模型提示不替代官方信息。</p>'+globalLink;
     else {
       body='<p>美国 NWS · 按所选地点附近坐标查询，非整个行政区。官方原文与下方模型提示分开显示。</p>';
-      if(snapshot.status==='loading')body+='<p role="status">正在查询官方预警…</p>';
+      if(snapshot.status==='stale')body+='<p role="status">官方预警资料需要更新，当前状态未知。</p>';
+      else if(snapshot.status==='loading')body+='<p role="status">正在查询官方预警…</p>';
       else if(snapshot.status==='error'||snapshot.key!==window.OfficialAlerts.endpoint(state.city))body+='<p role="status">官方预警暂不可用，当前状态未知。</p>';
       else {
         if(snapshot.status==='partial')body+='<p>部分官方资料无法核验，列表可能不完整。</p>';
@@ -6986,6 +6987,8 @@ body.loop-still .pill.bad {
     renderOutdoor();
   }
   window.addEventListener('offline', refreshTimeSensitiveCards);
+  document.addEventListener('visibilitychange', refreshTimeSensitiveCards);
+  window.addEventListener('pageshow', refreshTimeSensitiveCards);
   window.addEventListener('online', function () { refreshTimeSensitiveCards(); loadWeather(); });
   setInterval(refreshTimeSensitiveCards, 60000);
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

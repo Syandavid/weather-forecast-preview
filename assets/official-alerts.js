@@ -26,16 +26,20 @@
   let value={status:'uncovered',key:null,at:0,alerts:[]},seq=0,controller=null;
   async function load(city,force=false){
    const url=endpoint(city),key=url||'uncovered';
-   if(!force&&value.key===key&&(value.status==='loading'||clock()-value.at<300000))return value;
+   const age=clock()-value.at;
+   if(!force&&value.key===key&&age>=0&&age<(value.status==='loading'?12000:300000))return value;
    const token=++seq;if(controller)controller.abort();
    if(!url){value={status:'uncovered',key,at:clock(),alerts:[]};notify();return value;}
    controller=new AbortController();const own=controller;
-   value={status:'loading',key,at:clock(),alerts:[]};notify();
+   const started=clock();
+   value={status:'loading',key,at:started,alerts:[]};notify();
    const timer=setTimeout(()=>own.abort(),12000);
    try{
     const response=await request(url,{signal:own.signal,credentials:'omit',referrerPolicy:'no-referrer',headers:{Accept:'application/geo+json'}});
     if(!response.ok)throw Error('Official alert HTTP '+response.status);
-    const parsed=normalize(await response.json(),clock());
+    const data=await response.json();
+    if(clock()<started||clock()-started>=12000)throw Error('Official alert request expired');
+    const parsed=normalize(data,clock());
     if(token!==seq)return value;
     value={...parsed,status:parsed.partial?'partial':'ready',key,at:clock()};
    }catch(e){if(token!==seq)return value;value={status:'error',key,at:clock(),alerts:[]};}
@@ -43,6 +47,8 @@
    if(token===seq)notify();return value;
   }
   return {load,get:()=>{
+   const age=clock()-value.at;
+   if(['ready','partial'].includes(value.status)&&(age<0||age>=300000))return {...value,status:'stale',alerts:[]};
    const alerts=value.alerts.filter(a=>a.validUntil>clock()).map(a=>({...a,upcoming:instant(a.effective)>clock()}));
    return {...value,alerts,status:alerts.length===value.alerts.length?value.status:'partial'};
   }};
