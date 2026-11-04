@@ -1831,7 +1831,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">32.08</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">32.09</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -4112,6 +4112,8 @@ body.loop-still .pill.bad {
       return {text:'图层资料不完整 · 空白不代表无雨或晴空',warning:true};
     if(/加载中|绘制中|正在加载/.test(text))return {text:'正在加载图层 · 详情查看当前进度',warning:false};
     if(/非未来卫星实拍/.test(text))return {text:'云雨模型预报 · 非卫星实拍',warning:false};
+    const daily=text.match(/真实色日合成 (\d{4}-\d{2}-\d{2})/);
+    if(daily)return {text:'真实色 '+daily[1]+' · 非实时日合成',warning:false};
     return {text:'图层状态与说明',warning:false};
   }
   function syncCaptionSummary() {
@@ -5730,7 +5732,33 @@ body.loop-still .pill.bad {
       if(layer.weatherOutsideView){layer.weatherOutsideView=false;layer.addTo(state.satMap);}
       state.satelliteLabel=layer.weatherKind==='infrared'?sourceLabel+'红外观测 '+stamp.replace('T',' ').replace('Z',' UTC')+'（有延迟）':'真实色日合成 '+stamp+'（UTC，同日不变）';
     });
+    if(state.trueColorDateFailed&&(state.satLayer==='truecolor'||state.satLayer==='city'&&state.satHdOverlay==='truecolor'))state.satelliteLabel='真实色资料暂不可用：可用日期未确认';
     if(future&&state.satLayer!=='city')ensureSatFallback();
+  }
+  function latestTrueColorDay(xml, today) {
+    const parse=s=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return NaN;const t=Date.parse(s+'T00:00:00Z');return Number.isFinite(t)&&new Date(t).toISOString().slice(0,10)===s?t:NaN;};
+    const limit=parse(today);if(!Number.isFinite(limit)||typeof xml!=='string'||xml.length>32768)return null;
+    const domain=xml.match(/<(?:[\w.-]+:)?Domain>([^<]*)<\/(?:[\w.-]+:)?Domain>/);
+    if(!domain)return null;
+    let best=-Infinity;
+    for(const part of domain[1].split(',')){
+      const pieces=part.trim().split('/'),a=parse(pieces[0]),b=pieces.length===1?a:parse(pieces[1]);
+      if(pieces.length!==1&&(pieces.length!==3||pieces[2]!=='P1D'))continue;
+      const candidate=Math.min(b,limit);
+      if(Number.isFinite(a)&&Number.isFinite(b)&&a<=b&&candidate>=a&&candidate>=limit-7*86400000)best=Math.max(best,candidate);
+    }
+    return Number.isFinite(best)?new Date(best).toISOString().slice(0,10):null;
+  }
+  async function trueColorDate() {
+    const today=utcDate(0),cached=trueColorDate.cached;
+    if(cached&&cached.today===today&&Date.now()-cached.at<300000)return cached.promise;
+    const url='https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/1.0.0/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/GoogleMapsCompatible_Level9/all/'+utcDate(-7)+'--'+today+'.xml';
+    const promise=getText(url,{timeoutMs:8000}).then(xml=>latestTrueColorDay(xml,today)).catch(()=>null).then(day=>{
+      if(!day&&trueColorDate.cached?.promise===promise)trueColorDate.cached=null;
+      return day;
+    });
+    trueColorDate.cached={today,at:Date.now(),promise};
+    return promise;
   }
   async function setSatHdOverlay(kind) {
     const request = state.hdRequest = (state.hdRequest || 0) + 1;
@@ -5745,9 +5773,10 @@ body.loop-still .pill.bad {
       url = gibsUrl("Himawari_AHI_Band13_Clean_Infrared", "GoogleMapsCompatible_Level6", "png").replace("{time}", tm);
       maxNative = 6; attr = "NASA GIBS";
     } else {
-      let tm = utcDate(0);
-      const probe = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/" + tm + "/GoogleMapsCompatible_Level9/3/3/6.jpg";
-      if (!(await probeImg(probe))) tm = utcDate(-1);
+      const tm = await trueColorDate();
+      if(request!==state.hdRequest)return;
+      state.trueColorDateFailed=!tm;
+      if(!tm){state.satelliteLabel='真实色资料暂不可用：可用日期未确认';updateCaption();return;}
       url = gibsUrl("VIIRS_SNPP_CorrectedReflectance_TrueColor", "GoogleMapsCompatible_Level9", "jpg").replace("{time}", tm);
       attr = "NASA GIBS / VIIRS";
     }
@@ -5785,15 +5814,14 @@ body.loop-still .pill.bad {
       maxZ = 6; iso = tm; attr = "NASA GIBS";
       state.satTimeFrames = [{ time: Math.floor(new Date(tm).getTime() / 1000), iso: tm, url: url }];
     } else {
-      let tm = utcDate(0);
-      const probe = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/" +
-        tm + "/GoogleMapsCompatible_Level9/3/3/6.jpg";
-      if (!(await probeImg(probe))) tm = utcDate(-1);
+      const tm = await trueColorDate();
+      if(request!==state.baseRequest)return;
+      state.trueColorDateFailed=!tm;
+      if(!tm){state.satelliteLabel='真实色资料暂不可用：可用日期未确认';await ensureSatFallback();updateCaption();return;}
       url = gibsUrl("VIIRS_SNPP_CorrectedReflectance_TrueColor", "GoogleMapsCompatible_Level9", "jpg").replace("{time}", tm);
       maxZ = 9; iso = tm + "T00:00:00Z"; attr = "NASA GIBS / VIIRS";
       const frames = [];
-      for (let d = -2; d <= 0; d++) {
-        const day = utcDate(d);
+      for (const day of [tm]) {
         frames.push({
           time: Math.floor(new Date(day + "T00:00:00Z").getTime() / 1000),
           iso: day,
