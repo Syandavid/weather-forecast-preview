@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<link rel="preload" as="style" href="assets/ui-clean.css?v=32.13">
+<link rel="preload" as="style" href="assets/ui-clean.css?v=32.14">
 <title>天气预报 · 验收预览</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
@@ -1454,7 +1454,7 @@ body.loop-still .pill.bad {
 @media (max-width: 480px) { .hero::before { background-position: 68% center; } }
 @media (prefers-reduced-motion: reduce) { .clothing-person, .clothing-umbrella, .clothing-rain, .sat-wind-barb svg { animation:none !important; } }
 </style>
-<link rel="stylesheet" href="assets/ui-clean.css?v=32.13">
+<link rel="stylesheet" href="assets/ui-clean.css?v=32.14">
 </head>
 <body>
 <div id="app">
@@ -1840,7 +1840,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">32.13</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">32.14</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -1861,6 +1861,7 @@ body.loop-still .pill.bad {
 <script src="assets/storm-quality.js?v=32.05"></script>
 <script src="assets/official-alerts.js?v=32.13"></script>
 <script src="assets/map-weather.js?v=32.13"></script>
+<script src="assets/forecast-transition.js?v=32.14"></script>
 <script src="assets/pro-weather.js?v=28"></script>
 <script src="assets/city-search.js?v=31.32"></script>
 <script src="assets/road-overlay.js?v=31.32"></script>
@@ -2347,6 +2348,7 @@ body.loop-still .pill.bad {
     const reduced = prefersReduced();
     const pageHidden = document.hidden;
     const weatherOn = state.tab === "weather";
+    if(pageHidden||state.tab!=='sat'||state.satView!=='2d')state.forecastTransition?.suspend();
     document.body.classList.toggle("sky-still", reduced || pageHidden || !weatherOn);
     document.body.classList.toggle("loop-still", reduced || pageHidden);
     if (!reduced && !pageHidden && weatherOn && particleMode && getComputedStyle($('wxSky')).visibility !== 'hidden') startSkyFx();
@@ -4192,7 +4194,7 @@ body.loop-still .pill.bad {
         const active=ov('radar')||ov('precip')||ov('cloud');
         const fields=[ov('cloud')?'白灰：云量':'',ov('radar')||ov('precip')?'蓝紫：降水 mm/h':''].filter(Boolean).join('；');
         const previous=state.metGrid&&state.forecastRaster?'；仅保留上次覆盖区域':'';
-        const status=!active?'云量和降水图层已关闭':state.metLoadingKey?'云雨预报加载中'+previous:state.metLoadFailed?'云雨预报更新失败'+previous+'，空白不代表无雨':state.forecastRenderError?'云雨绘图暂不可用，请刷新':state.forecastRendering?'云雨绘制中'+(state.forecastRaster?'（暂显示上一帧）':''):state.fcUnavailable||!state.forecastRasterKnown?'当前时段/视野预报数据暂缺，空白不代表无雨':'逐小时预报 · '+fields;
+        const status=!active?'云量和降水图层已关闭':state.metLoadingKey?'云雨预报加载中'+previous:state.metLoadFailed?'云雨预报更新失败'+previous+'，空白不代表无雨':state.forecastRenderError?'云雨绘图暂不可用，请刷新':state.forecastFrameFailed?'云雨图像加载失败，'+(state.forecastRaster?'暂显示上一有效时次；不代表当前天气':'空白不代表无雨'):state.forecastRendering||state.forecastFramePending?'云雨绘制中'+(state.forecastRaster?'（暂显示上一帧）':''):state.fcUnavailable||!state.forecastRasterKnown?'当前时段/视野预报数据暂缺，空白不代表无雨':'逐小时预报 · '+fields;
         el.textContent=status+' · 模型采样插值，非未来卫星实拍';
       } else {
         const fr=playheadFrame(), radar=radarFrameAt(fr&&fr.time||Date.now()/1000);
@@ -5367,9 +5369,9 @@ body.loop-still .pill.bad {
     setTimeout(function(){try{const t=performance.now(),r=window.MapWeather.raster(job.grid,job.width,job.height,job.bounds,job.clouds,job.rain);finishForecastRender({id:job.id,pixels:r.pixels,known:r.known,ms:Math.round(performance.now()-t)});}catch(_){finishForecastRender({id:job.id,error:true});}},0);
   }
   function drawForecastRaster() {
-    state.forecastRasterKnown=0;
+    if(!state.forecastRaster)state.forecastRasterKnown=0;
     state.forecastRendering=false;
-    const clear=function(){if(state.forecastRaster){state.satMap.removeLayer(state.forecastRaster);state.forecastRaster=null;}};
+    const clear=function(){if(state.forecastTransition)state.forecastTransition.clear();else if(state.forecastRaster){state.satMap.removeLayer(state.forecastRaster);state.forecastRaster=null;}};
     const pts=state.metGrid&&state.metGrid.points||[];
     // Keep the previous georeferenced field while zooming/loading a denser
     // viewport. It stays in its original bounds, never moves to a new city.
@@ -5378,7 +5380,7 @@ body.loop-still .pill.bad {
     if(!Number.isFinite(rows)||rows<2||cols<2||rows*cols!==pts.length){clear();return;}
     const bounds={south:pts[0].lat,north:pts[pts.length-1].lat,west:pts[0].unwrappedLon,east:pts[pts.length-1].unwrappedLon};
     const fr=playheadFrame(), view=state.satMap.getSize(), size=window.MapWeather.renderSize(view.x,view.y,window.devicePixelRatio||1,state.mapQuality);
-    if(state.forecastRenderGrid!==state.metGrid){state.forecastRenderGrid=state.metGrid;state.forecastRenderCache=new Map();state.forecastRenderError=false;}
+    if(state.forecastRenderGrid!==state.metGrid){state.forecastRenderGrid=state.metGrid;state.forecastRenderCache=new Map();state.forecastRenderError=false;state.forecastVisualSeq=(state.forecastVisualSeq||0)+1;}
     const key=[fr.time,ov('cloud'),ov('radar')||ov('precip'),size.width,size.height].join('|');
     let rendered=state.forecastRenderCache.get(key);
     if(!rendered){
@@ -5393,11 +5395,13 @@ body.loop-still .pill.bad {
     }
     if(!rendered.known){clear();return;}
     const area=[[bounds.south,bounds.west],[bounds.north,bounds.east]],url=rendered.url;
-    if(state.forecastRaster)state.forecastRaster.setBounds(area).setUrl(url);
-    else state.forecastRaster=L.imageOverlay(url,area,{pane:'precipPane',interactive:false,opacity:1,alt:'逐小时云量与降水模型预报'}).addTo(state.satMap);
-    state.forecastRasterKnown=rendered.known;
-    const el=state.forecastRaster.getElement();
-    if(el){el.dataset.forecastTime=String(fr.time);el.dataset.clouds=String(ov('cloud'));el.dataset.rain=String(ov('radar')||ov('precip'));el.dataset.rasterSize=size.width+'x'+size.height;el.dataset.sampleGrid=cols+'x'+rows;el.dataset.renderMs=String(rendered.ms);el.dataset.uiMs=String(rendered.uiMs);}
+    if(!state.forecastTransition)state.forecastTransition=window.ForecastTransition.create({
+      map:state.satMap,
+      makeLayer:(src,bounds)=>L.imageOverlay(src,bounds,{pane:'precipPane',interactive:false,opacity:0,alt:'逐小时云量与降水模型预报'}),
+      active:()=>state.tab==='sat'&&state.satView==='2d'&&!document.hidden&&playheadIsFuture(),reduced:prefersReduced,
+      onChange:info=>{state.forecastRaster=info.layer;state.forecastRasterKnown=Number(info.meta?.known)||0;state.forecastFramePending=info.pending;state.forecastFrameFailed=info.failed;updateCaption();}
+    });
+    state.forecastTransition.show((state.forecastVisualSeq||0)+':'+key,url,area,{known:rendered.known,forecastTime:String(fr.time),clouds:String(ov('cloud')),rain:String(ov('radar')||ov('precip')),rasterSize:size.width+'x'+size.height,sampleGrid:cols+'x'+rows,renderMs:String(rendered.ms),uiMs:String(rendered.uiMs)});
   }
   function drawMetFields() {
     if (!state.satMap || !window.L) return;
@@ -6086,7 +6090,7 @@ body.loop-still .pill.bad {
     state.radarTimer = null;
     if (!state.radarPlaying) return;
     if (document.hidden || state.tab !== "sat" || state.satView !== "2d") return;
-    if(state.forecastRendering){schedulePlayTick(150);return;}
+    if(state.forecastRendering||state.forecastFramePending){schedulePlayTick(150);return;}
     const frames = playFrames();
     if (frames.length < 2) { stopRadarLoop(); updatePlayhead(); return; }
     const prev = frames[state.radarIdx];

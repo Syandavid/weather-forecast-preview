@@ -189,7 +189,7 @@ button, summary { touch-action:manipulation; }
 .sat-data-details[open] .sat-data-action::after { content:" −"; }
 .sat-data-details.has-warning > summary { color:#ffe0a3; }
 .sat-data-details > summary:focus-visible { outline:2px solid #9fd2ff; border-radius:6px; }
-.sat-data-details .sat-caption { margin:0 0 10px; color:#d7e2ef; }
+.sat-data-details .sat-caption { margin:0 0 10px; color:#d7e2ef; block-size:4.5em; min-block-size:4.5em; max-block-size:4.5em; overflow-y:auto; pointer-events:auto; overscroll-behavior:contain; scrollbar-gutter:stable; }
 .sat-time-label { position:absolute; bottom:0; color:#c1ccdc; font-size:10px; font-variant-numeric:tabular-nums; white-space:nowrap; pointer-events:none; background:rgba(14,24,40,.94); z-index:5; padding-top:2px; }
 .sat-time-label.middle { transform:translateX(-50%); }
 .sat-time-label.end { transform:translateX(-100%); }
@@ -229,7 +229,7 @@ button, summary { touch-action:manipulation; }
 #sat .maplibregl-ctrl-attrib-inner { overflow-wrap:anywhere; }
 #sat #sat3dAttribution .maplibregl-ctrl-attrib { margin:0; padding:2px 5px; max-width:100%; border-radius:4px; }
 @media (max-height:480px) and (orientation:landscape) {
-  #sat .sat-playbar { gap:0; padding-block:4px; bottom:6px; }
+  #sat .sat-playbar { gap:0; padding-block:4px; bottom:6px; max-height:calc(100% - 12px); overflow-y:auto; overscroll-behavior:contain; }
   #sat .sat-playbar-row { display:flex; }
   #sat .maplibregl-ctrl-group { display:flex; }
   #sat .maplibregl-ctrl-group button + button { border-top:0; border-left:1px solid rgba(255,255,255,.16); }
@@ -348,7 +348,10 @@ html[data-appearance="light"] #closeAbout { background:var(--card); color:var(--
 #closeAbout, .favorite-toggle { min-width:44px; min-height:44px; }
 .sat-time-settings select { min-height:44px; max-width:100%; }
 #radarCoverageNote { font-size:11px; line-height:1.35; color:#d4c6a2; padding:3px 0; }
-#radarCoverageNote[hidden] { display:none; }
+#radarCoverageNote[hidden] { display:block !important; visibility:hidden; }
+.view-3d #radarCoverageNote[hidden] { display:none !important; }
+#sat #satLabelAttribution[hidden] { display:block !important; visibility:hidden; }
+#sat .view-3d #satLabelAttribution[hidden] { display:none !important; }
 .route-diagnostic { margin-top:12px; border-top:1px solid var(--line); }
 .route-diagnostic summary { min-height:44px; display:flex; align-items:center; cursor:pointer; }
 html[data-appearance="light"] .trend-grid { stroke:rgba(30,63,101,.2); }
