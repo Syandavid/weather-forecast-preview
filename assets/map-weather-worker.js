@@ -1,5 +1,5 @@
 /* Heavy raster work runs off the UI thread. No network/weather calls here. */
-importScripts('./map-weather.js?v=27.1');
+importScripts('./map-weather.js?v=32.13');
 self.onmessage=async function(event){
   const job=event.data,started=performance.now();
   try{

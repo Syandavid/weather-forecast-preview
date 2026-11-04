@@ -19,9 +19,15 @@
     // Continuous low-rain alpha avoids the former hard 0.08 mm boundary.
     rainLut[i*4+3]=smooth((mm-.05)/.30)*(.40+.30*(1-Math.exp(-mm/5)));
   }
-  function renderSize(width,height,dpr=1) {
+  function displayProfile(mode) {
+    if(mode==='save')return {id:'save',name:'省流',pixels:120000,edge:640,dpr:1,frames:4,tileZoomOffset:1,buffer:1};
+    if(mode==='high')return {id:'high',name:'高质量',pixels:900000,edge:1536,dpr:2,frames:8,tileZoomOffset:0,buffer:3};
+    return {id:'standard',name:'标准',pixels:400000,edge:1024,dpr:1.5,frames:8,tileZoomOffset:0,buffer:3};
+  }
+  function renderSize(width,height,dpr=1,mode='standard') {
+    const profile=displayProfile(mode);
     width=Math.max(2,width);height=Math.max(2,height);
-    const scale=Math.min(Math.max(1,Math.min(1.5,dpr)),1024/Math.max(width,height),Math.sqrt(400000/(width*height)));
+    const scale=Math.min(Math.max(1,Math.min(profile.dpr,dpr)),profile.edge/Math.max(width,height),Math.sqrt(profile.pixels/(width*height)));
     return {width:Math.max(2,Math.floor(width*scale)),height:Math.max(2,Math.floor(height*scale))};
   }
   function refineGrid(grid,factor=4) {
@@ -77,5 +83,5 @@
     }
     return {pixels,known};
   }
-  root.MapWeather={satelliteStamp,raster,renderSize,refineGrid};
+  root.MapWeather={satelliteStamp,raster,renderSize,refineGrid,displayProfile};
 })(typeof window!=='undefined'?window:globalThis);

@@ -346,6 +346,11 @@ html[data-appearance="light"] .banner.danger { color:var(--danger); }
 html[data-appearance="light"] .favorite-toggle { color:var(--warn); }
 html[data-appearance="light"] #closeAbout { background:var(--card); color:var(--text); }
 #closeAbout, .favorite-toggle { min-width:44px; min-height:44px; }
+.sat-time-settings select { min-height:44px; max-width:100%; }
+#radarCoverageNote { font-size:11px; line-height:1.35; color:#d4c6a2; padding:3px 0; }
+#radarCoverageNote[hidden] { display:none; }
+.route-diagnostic { margin-top:12px; border-top:1px solid var(--line); }
+.route-diagnostic summary { min-height:44px; display:flex; align-items:center; cursor:pointer; }
 html[data-appearance="light"] .trend-grid { stroke:rgba(30,63,101,.2); }
 html[data-appearance="light"] .trend-point { fill:var(--bg-2); stroke:var(--sky); }
 html[data-appearance="light"] .trend-cursor-handle { stroke:var(--sky); }

@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<link rel="preload" as="style" href="assets/ui-clean.css?v=32.11">
+<link rel="preload" as="style" href="assets/ui-clean.css?v=32.13">
 <title>天气预报 · 验收预览</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
@@ -1454,7 +1454,7 @@ body.loop-still .pill.bad {
 @media (max-width: 480px) { .hero::before { background-position: 68% center; } }
 @media (prefers-reduced-motion: reduce) { .clothing-person, .clothing-umbrella, .clothing-rain, .sat-wind-barb svg { animation:none !important; } }
 </style>
-<link rel="stylesheet" href="assets/ui-clean.css?v=32.11">
+<link rel="stylesheet" href="assets/ui-clean.css?v=32.13">
 </head>
 <body>
 <div id="app">
@@ -1710,6 +1710,10 @@ body.loop-still .pill.bad {
             </button>
             <div class="china-range-note" id="trafficStatus" role="status">点位层已关闭 · 不提供实时灯色</div>
             </details>
+            <details class="sat-time-settings"><summary>显示质量</summary>
+              <label for="satQuality">显示档位<select id="satQuality"><option value="save">省流</option><option value="standard" selected>标准</option><option value="high">高质量</option></select></label>
+              <small id="satQualityNote" role="status">标准 · 调整绘制清晰度，不提高原始气象精度。</small>
+            </details>
             <details class="sat-time-settings"><summary>时间与播放</summary>
               <small>回看只播放已有雷达时次；未来云雨是模型预报，不是卫星照片。</small>
               <label>时间轴时区<select id="satClockMode"><option value="city">所选城市</option><option value="utc">世界时 UTC</option></select></label>
@@ -1762,6 +1766,7 @@ body.loop-still .pill.bad {
               <button class="sat-now-btn" id="satNow" type="button">现在</button>
               <div class="sat-ticks" id="satTicks" role="slider" aria-label="时间轴" aria-description="按资料帧排列；历史观测与逐小时预报间隔可能不同"></div>
             </div>
+            <div id="radarCoverageNote" hidden>雷达覆盖未核验 · 空白不代表无雨</div>
             <div id="boundaryReviewNotice" role="status" hidden>对照示意线未核准，不可作国界依据</div>
             <details class="sat-data-details" id="satDataDetails">
               <summary><span id="satDataSummary">图层状态与说明</span><span class="sat-data-action">详情</span></summary>
@@ -1790,7 +1795,8 @@ body.loop-still .pill.bad {
             <div><i class="lg-dash"></i>实线、实心点＝历史观测；虚线、空心点＝路径预报。点按路径点查看时间、风速与气压。</div>
             <div>风箭头指向吹去方向；越长、移动越快表示风速越大。静风或风向缺测时不画箭头。</div>
             <div><i class="lg-cone"></i>阴影随预报时长示意性加宽，不是官方概率范围或风圈。</div>
-            <div><i class="lg-rain"></i>降雨颜色＝预报雨量 mm</div>
+            <div><i class="lg-rain"></i>未来蓝紫色＝模型降水 mm/h；雷达颜色是反射率图像，不能直接读作同一雨量。</div>
+            <div>未接入可靠雷达覆盖边界，不能从透明瓦片判断当地有无雷达或降雨。</div>
             <div><i class="lg-city"></i>蓝色光圈＝所选城市（始终置顶）</div>
             </div>
           </div>
@@ -1834,7 +1840,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">32.12</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">32.13</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -1851,10 +1857,10 @@ body.loop-still .pill.bad {
   </div>
 </div>
 <script src="assets/weather-insights.js?v=31.98"></script>
-<script src="assets/route-weather.js?v=31.54"></script>
+<script src="assets/route-weather.js?v=32.13"></script>
 <script src="assets/storm-quality.js?v=32.05"></script>
-<script src="assets/official-alerts.js?v=32.12"></script>
-<script src="assets/map-weather.js?v=27.1"></script>
+<script src="assets/official-alerts.js?v=32.13"></script>
+<script src="assets/map-weather.js?v=32.13"></script>
 <script src="assets/pro-weather.js?v=28"></script>
 <script src="assets/city-search.js?v=31.32"></script>
 <script src="assets/road-overlay.js?v=31.32"></script>
@@ -3299,7 +3305,7 @@ body.loop-still .pill.bad {
       '模型起报／源站更新时间：当前响应未提供，不能用下载时间代替。',
       '逐时数据时间范围：' + (times.length ? times[0].replace('T', ' ') + ' 至 ' + times[times.length - 1].replace('T', ' ') + '（' + zone + '）' : '未提供') + '；首末时间不代表中间无缺项。',
       '未来48小时风险字段：' + (!result || result.status === 'stale' ? '数据缺失或过期，暂不可判断。' : result.complete ? '所检验的温度、天气现象、降水、风速和阵风连续覆盖；不等于涵盖所有气象风险。' : '存在缺项或时段不足，不能完整判断；已知风险仍会提示。'),
-      '城市官方预警：尚未接入。模型提示不能替代当地气象部门发布的信息。'
+      '城市官方预警：' + (window.OfficialAlerts ? window.OfficialAlerts.summary(city,typeof officialAlertsClient!=='undefined'&&officialAlertsClient?officialAlertsClient.get():null) : '组件未加载，当前状态未知。') + '模型提示不能替代当地气象部门发布的信息。'
     ].join('\n');
   }
   function updateWeatherStamp(w, cached, loading) {
@@ -3669,7 +3675,7 @@ body.loop-still .pill.bad {
   function officialWarningsMarkup() {
     const globalLink='<a class="official-warning-link" href="https://severeweather.wmo.int/" target="_blank" rel="noopener noreferrer">WMO 全球官方预警入口 ↗</a>';
     if(!window.OfficialAlerts)return '<section class="official-warning"><h2>官方预警</h2><p>组件未加载，当前状态未知。</p>'+globalLink+'</section>';
-    if(!officialAlertsClient)officialAlertsClient=window.OfficialAlerts.create({onChange:renderAlerts});
+    if(!officialAlertsClient)officialAlertsClient=window.OfficialAlerts.create({onChange:()=>{renderAlerts();updateWeatherStamp(state.weather,state.weatherCached,false);}});
     if(state.tab==='alerts')officialAlertsClient.load(state.city);
     const supported=!!window.OfficialAlerts.endpoint(state.city),snapshot=officialAlertsClient.get();
     let body='';
@@ -4166,6 +4172,8 @@ body.loop-still .pill.bad {
     if(!caption||!label||!details)return;
     const summary=captionSummary(caption.textContent||'');
     label.textContent=summary.text;details.classList.toggle('has-warning',summary.warning);
+    const coverage=$('radarCoverageNote');
+    if(coverage)coverage.hidden=state.satView!=='2d'||playheadIsFuture()||!(ov('radar')||ov('precip'));
   }
   function updateCaption() {
     const el = $("satCaption");
@@ -5013,15 +5021,8 @@ body.loop-still .pill.bad {
       displayWeather();
     } catch (e) {
       if (requestId === state.routeRequest && status) {
-        let hint=e.userMessage || '服务暂时不可用，请稍后重试。';
-        if(stage==='道路规划'){
-          if(e.roadCode==='NoRoute')hint='未找到连通的驾车路线。试试在车站入口附近的道路上选点。';
-          else if(e.roadCode==='NoSegment')hint='起点或终点未匹配到可驾车道路，请在附近道路上重新选点。';
-          else if(e.httpStatus===429)hint='道路服务请求过多，请稍后重试，无需修改站名。';
-          else if(e.name==='AbortError')hint='等待道路服务响应超时，请稍后重试，无需修改站名。';
-          else hint='未取得有效的道路服务响应，请稍后重试，无需修改站名。';
-        }
-        status.textContent=stage+'失败：'+hint+'（路线版 32.01）';
+        const report=window.RouteWeather.failure(stage,e);
+        status.innerHTML='<strong>'+escapeCityText(stage)+'失败</strong><p>'+escapeCityText(report.hint)+'</p><details class="route-diagnostic"><summary>故障详情 · 可截图反馈</summary><p>页面 '+escapeCityText($('appBuild')?.textContent||'版本未知')+' · 环节 '+escapeCityText(stage)+' · 类别 '+escapeCityText(report.code)+'</p><p>不需要提供密码或 API 密钥；此处不记录定位、站名或完整请求地址。</p></details>';
       }
     } finally {
       if (requestId === state.routeRequest) {
@@ -5345,7 +5346,7 @@ body.loop-still .pill.bad {
         const ctx=canvas.getContext('2d'),img=ctx.createImageData(job.width,job.height);img.data.set(result.pixels);ctx.putImageData(img,0,0);url=canvas.toDataURL();
       }
       state.forecastRenderCache.set(job.key,{url,known:result.known,ms:result.ms,uiMs:Math.round(performance.now()-started)});
-      if(state.forecastRenderCache.size>8)state.forecastRenderCache.delete(state.forecastRenderCache.keys().next().value);
+      if(state.forecastRenderCache.size>window.MapWeather.displayProfile(state.mapQuality).frames)state.forecastRenderCache.delete(state.forecastRenderCache.keys().next().value);
     }
     // Only draw the currently selected time. Intermediate queued times are
     // intentionally skipped, so dragging cannot build up a render backlog.
@@ -5355,7 +5356,7 @@ body.loop-still .pill.bad {
     state.forecastRenderJob=job;
     if(!state.forecastWorker&&!state.forecastWorkerDisabled&&window.Worker){
       try{
-        state.forecastWorker=new Worker('assets/map-weather-worker.js?v=27.1');
+        state.forecastWorker=new Worker('assets/map-weather-worker.js?v=32.13');
         state.forecastWorker.onmessage=e=>finishForecastRender(e.data);
         state.forecastWorker.onerror=function(){state.forecastWorker.terminate();state.forecastWorker=null;state.forecastWorkerDisabled=true;const current=state.forecastRenderJob;if(current)finishForecastRender({id:current.id,error:true});};
       }catch(_){state.forecastWorker=null;}
@@ -5376,7 +5377,7 @@ body.loop-still .pill.bad {
     const rows=1+Math.max(...pts.map(p=>p.row)), cols=1+Math.max(...pts.map(p=>p.col));
     if(!Number.isFinite(rows)||rows<2||cols<2||rows*cols!==pts.length){clear();return;}
     const bounds={south:pts[0].lat,north:pts[pts.length-1].lat,west:pts[0].unwrappedLon,east:pts[pts.length-1].unwrappedLon};
-    const fr=playheadFrame(), view=state.satMap.getSize(), size=window.MapWeather.renderSize(view.x,view.y,window.devicePixelRatio||1);
+    const fr=playheadFrame(), view=state.satMap.getSize(), size=window.MapWeather.renderSize(view.x,view.y,window.devicePixelRatio||1,state.mapQuality);
     if(state.forecastRenderGrid!==state.metGrid){state.forecastRenderGrid=state.metGrid;state.forecastRenderCache=new Map();state.forecastRenderError=false;}
     const key=[fr.time,ov('cloud'),ov('radar')||ov('precip'),size.width,size.height].join('|');
     let rendered=state.forecastRenderCache.get(key);
@@ -5827,8 +5828,8 @@ body.loop-still .pill.bad {
     }
     if (!url || state.satLayer !== "city" || request !== state.hdRequest) return;
     state.satHdOverlayObj = L.tileLayer(url, {
-      pane: "cityPane", maxNativeZoom: maxNative, maxZoom: 19, tileSize: 256,
-      keepBuffer: 3, updateWhenZooming: false, updateWhenIdle: true,
+      pane: "cityPane", maxNativeZoom: maxNative-window.MapWeather.displayProfile(state.mapQuality).tileZoomOffset, maxZoom: 19, tileSize: 256,
+      keepBuffer: window.MapWeather.displayProfile(state.mapQuality).buffer, updateWhenZooming: false, updateWhenIdle: true,
       attribution: attr, opacity: Math.min(.52, state.satOp)
     });
     state.satHdOverlayObj.weatherKind=state.satHdOverlay;
@@ -5886,8 +5887,8 @@ body.loop-still .pill.bad {
       if (state.satMap.getZoom && state.satMap.getZoom() > mapMaxZoom) state.satMap.setZoom(mapMaxZoom);
     }
     state.satLayerObj = L.tileLayer(url, {
-      maxNativeZoom: maxZ || 7, maxZoom: mapMaxZoom, tileSize: 256,
-      keepBuffer: 3, updateWhenZooming: false, updateWhenIdle: true,
+      maxNativeZoom: (maxZ || 7)-window.MapWeather.displayProfile(state.mapQuality).tileZoomOffset, maxZoom: mapMaxZoom, tileSize: 256,
+      keepBuffer: window.MapWeather.displayProfile(state.mapQuality).buffer, updateWhenZooming: false, updateWhenIdle: true,
       attribution: attr, opacity: state.satOp
     });
     let errN = 0;
@@ -6037,8 +6038,8 @@ body.loop-still .pill.bad {
     if (!future && (ov("radar") || ov("precip")) && radarFrame) {
       const f = radarFrame;
       state.satRadarLayer = L.tileLayer(f.url, {
-        pane: "radarPane", opacity: 0.65, maxZoom: 19, maxNativeZoom: 7,
-        keepBuffer: 3, updateWhenZooming: false, updateWhenIdle: true,
+        pane: "radarPane", opacity: 0.65, maxZoom: 19, maxNativeZoom: 7-window.MapWeather.displayProfile(state.mapQuality).tileZoomOffset,
+        keepBuffer: window.MapWeather.displayProfile(state.mapQuality).buffer, updateWhenZooming: false, updateWhenIdle: true,
         attribution: "RainViewer", tileSize: 256
       });
       setRadarFrame(state.satRadarLayer, f, true);
@@ -6785,6 +6786,17 @@ body.loop-still .pill.bad {
         setSatBase(b.getAttribute("data-base"));
         $("satBmap").classList.remove("open");
       });
+    });
+    const quality=$('satQuality');
+    let storedQuality;try{storedQuality=localStorage.getItem('weather-acceptance-map-quality');}catch(_){}
+    state.mapQuality=window.MapWeather.displayProfile(storedQuality).id;
+    const qualityNote=()=>{$('satQualityNote').textContent=state.mapQuality==='save'?'省流 · 使用较低级别影像瓦片并减少绘制像素；城市影像会较模糊，原始预报数据不变。':state.mapQuality==='high'?'高质量 · 增加绘制像素，可能更耗电；不增加原始天气精度。':'标准 · 平衡绘制清晰度与耗电；不提高原始气象精度。';};
+    quality.value=state.mapQuality;qualityNote();
+    quality.addEventListener('change',()=>{
+      state.mapQuality=window.MapWeather.displayProfile(quality.value).id;quality.value=state.mapQuality;qualityNote();
+      try{localStorage.setItem('weather-acceptance-map-quality',state.mapQuality);}catch(_){}
+      state.forecastRenderGrid=null;
+      if(state.satMap){setSatBase(state.satLayer).then(()=>{applySatOverlays();drawMetFields();}).catch(()=>{});}
     });
     const clockMode=$('satClockMode'),loopSpeed=$('satLoopSpeed'),prefKey='weather-acceptance-map-playback';
     let prefs={};try{prefs=JSON.parse(localStorage.getItem(prefKey))||{};}catch(_){}

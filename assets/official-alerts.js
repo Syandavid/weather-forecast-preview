@@ -53,5 +53,16 @@
    return {...value,alerts,status:alerts.length===value.alerts.length?value.status:'partial'};
   }};
  }
- root.OfficialAlerts={endpoint,normalize,create};
+ function summary(city,snapshot){
+  const key=endpoint(city);
+  if(!key)return '所选地点尚未接入官方预警；不能据此判断没有预警。';
+  const prefix='已接入美国 NWS（所选坐标附近，非整个行政区）。';
+  if(!snapshot||snapshot.key!==key||snapshot.status==='idle')return prefix+'尚未查询，请打开预警页。';
+  if(snapshot.status==='loading')return prefix+'正在查询，当前状态未知。';
+  if(snapshot.status==='stale')return prefix+'资料已过期，当前状态未知。';
+  if(snapshot.status==='partial')return prefix+'部分资料无法核验，列表可能不完整。';
+  if(snapshot.status!=='ready')return prefix+'查询失败或不可用，当前状态未知。';
+  return prefix+(snapshot.alerts?.length?'本次查询有 '+snapshot.alerts.length+' 条有效信息，请查看预警页。':'本次查询未返回有效预警；不代表没有其他风险。');
+ }
+ root.OfficialAlerts={endpoint,normalize,create,summary};
 })(typeof window!=='undefined'?window:globalThis);

@@ -139,5 +139,19 @@
     if(row.code>=51||row.pop>=40||row.mm>0||row.wind>=10.8||row.gust>=17.2)return '#fbbf24';
     return '#4ade80';
   }
-  root.RouteWeather={wallTime,timeLabel,departure,samples,weather,color,windMs,placeCandidates,choosePlace,geocode};
+  function failure(stage,error={}) {
+    let code=error.httpStatus===429?'RATE_LIMIT':Number.isInteger(error.httpStatus)&&error.httpStatus>=400?'HTTP_'+error.httpStatus:error.name==='AbortError'||error.name==='TimeoutError'?'TIMEOUT':'UNAVAILABLE';
+    let hint='服务暂时不可用，请稍后重试；保留已填地点，无需重新输入。';
+    if(stage==='起点搜索'||stage==='终点搜索')hint=error.userMessage||'地点搜索服务未返回有效结果；请稍后重试，或在地图上选择'+(stage==='起点搜索'?'起点':'终点')+'。';
+    if(stage==='出发地时区查询')hint='无法确认出发地时区。可将出发时间留空按现在查询，或稍后重试。';
+    if(stage==='道路规划'){
+      if(error.roadCode==='NoRoute'){code='NO_ROUTE';hint='未找到连通的驾车路线。试试在车站入口附近的道路上选点。';}
+      else if(error.roadCode==='NoSegment'){code='NO_SEGMENT';hint='起点或终点未匹配到可驾车道路，请在附近道路上重新选点。';}
+      else if(code==='RATE_LIMIT')hint='道路服务请求过多，请稍后重试，无需修改站名。';
+      else if(code==='TIMEOUT')hint='等待道路服务响应超时，请稍后重试，无需修改站名。';
+      else hint='未取得有效的道路服务响应，请稍后重试，无需修改站名。';
+    }
+    return {code,hint};
+  }
+  root.RouteWeather={wallTime,timeLabel,departure,samples,weather,color,windMs,placeCandidates,choosePlace,geocode,failure};
 })(typeof window!=='undefined'?window:globalThis);
