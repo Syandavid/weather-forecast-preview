@@ -131,6 +131,24 @@ button, summary { touch-action:manipulation; }
 #satMap { position:relative; z-index:0; isolation:isolate; }
 .sat-rail-close { display:block; position:sticky; top:-14px; z-index:3; align-self:stretch; flex-shrink:0; margin:-14px -14px 8px; padding:8px 14px; text-align:right; background:#0e1828; font-size:14px; min-height:44px; }
 .sat-rail-title { font-size:16px; }
+.sat-rail-header { position:sticky; top:-14px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-shrink:0; margin:-14px -14px 12px; padding:12px 14px; background:#0e1828; z-index:3; border-bottom:1px solid var(--line); }
+.sat-rail-header small { display:block; margin-top:4px; color:var(--muted); font-size:11px; }
+.sat-rail-header .sat-rail-close { position:static; align-self:center; width:44px; margin:0; padding:0; text-align:center; font-size:25px; border:1px solid var(--line); border-radius:50%; background:transparent; }
+.sat-weather-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.sat-weather-grid .sat-ly { display:grid; grid-template-columns:20px minmax(0,1fr) 12px; gap:5px; padding:10px 8px; font-size:14px; min-height:64px; line-height:1.4; background:#152236; border:1px solid #34445b; margin:0; }
+.sat-weather-grid .sat-ly.on { background:#25405c; border-color:#8bc7ff; }
+.sat-weather-grid .sat-ly small { display:block; color:#c1ccdc; font-size:10px; margin-top:2px; white-space:nowrap; }
+.sat-rail { scrollbar-color:#63768c #0e1828; scrollbar-width:thin; }
+.sat-weather-grid .sat-ly svg { width:20px; height:20px; }
+.sat-weather-grid .sat-ly .ck { margin:0; }
+#satRail > details { flex-shrink:0; }
+#satRail > details > summary { list-style:none; display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0; font-weight:600; box-sizing:border-box; }
+#satRail > details > summary::-webkit-details-marker { display:none; }
+#satRail > details > summary::after { content:"＋"; color:var(--muted); font-size:18px; }
+#satRail > details[open] > summary::after { content:"−"; }
+#satRail > details > summary:focus-visible { outline:2px solid var(--sky); outline-offset:-2px; border-radius:8px; }
+#satRail .sat-time-settings { margin:8px 0; border-block:1px solid var(--line); padding:6px 0; }
+#satRail .sat-time-settings summary { min-height:44px; padding:10px 8px; cursor:pointer; font-size:14px; }
 .sat-sat-block { background:transparent; border:0; border-bottom:1px solid var(--line); margin:0 0 8px; padding:0 0 12px; }
 .sat-sat-sub { display:none; }
 .sat-ly { font-size:14px; min-height:44px; border-radius:12px; }
