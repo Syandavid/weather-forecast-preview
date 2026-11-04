@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<link rel="preload" as="style" href="assets/ui-clean.css?v=32.10.1">
+<link rel="preload" as="style" href="assets/ui-clean.css?v=32.11">
 <title>天气预报 · 验收预览</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
@@ -1454,7 +1454,7 @@ body.loop-still .pill.bad {
 @media (max-width: 480px) { .hero::before { background-position: 68% center; } }
 @media (prefers-reduced-motion: reduce) { .clothing-person, .clothing-umbrella, .clothing-rain, .sat-wind-barb svg { animation:none !important; } }
 </style>
-<link rel="stylesheet" href="assets/ui-clean.css?v=32.10.1">
+<link rel="stylesheet" href="assets/ui-clean.css?v=32.11">
 </head>
 <body>
 <div id="app">
@@ -1834,7 +1834,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">32.10</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">32.11</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -1853,6 +1853,7 @@ body.loop-still .pill.bad {
 <script src="assets/weather-insights.js?v=31.98"></script>
 <script src="assets/route-weather.js?v=31.54"></script>
 <script src="assets/storm-quality.js?v=32.05"></script>
+<script src="assets/official-alerts.js?v=32.11"></script>
 <script src="assets/map-weather.js?v=27.1"></script>
 <script src="assets/pro-weather.js?v=28"></script>
 <script src="assets/city-search.js?v=31.32"></script>
@@ -2607,6 +2608,7 @@ body.loop-still .pill.bad {
   function showTab(id) {
     state.tab = id;
     syncMapModeDock();
+    if(id==='alerts')renderAlerts();
     document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === id));
     document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.getAttribute("data-tab") === id));
     syncMotion();
@@ -3663,6 +3665,29 @@ body.loop-still .pill.bad {
     el.textContent = '附近气旋「' + (target.nameZh || target.nameEn) + '」中心距所选城市约 ' + candidates[0].distance + ' 公里 · 查看路径；距离不等于影响范围';
     el.onclick = () => { showTab("sat"); selectStorm(target); };
   }
+  let officialAlertsClient=null;
+  function officialWarningsMarkup() {
+    const globalLink='<a class="official-warning-link" href="https://severeweather.wmo.int/" target="_blank" rel="noopener noreferrer">WMO 全球官方预警入口 ↗</a>';
+    if(!window.OfficialAlerts)return '<section class="official-warning"><h2>官方预警</h2><p>组件未加载，当前状态未知。</p>'+globalLink+'</section>';
+    if(!officialAlertsClient)officialAlertsClient=window.OfficialAlerts.create({onChange:renderAlerts});
+    if(state.tab==='alerts')officialAlertsClient.load(state.city);
+    const supported=!!window.OfficialAlerts.endpoint(state.city),snapshot=officialAlertsClient.get();
+    let body='';
+    if(!supported)body='<p>所选地点尚未接入官方预警；不能据此判断没有预警。下方模型提示不替代官方信息。</p>'+globalLink;
+    else {
+      body='<p>美国 NWS · 按所选地点附近坐标查询，非整个行政区。官方原文与下方模型提示分开显示。</p>';
+      if(snapshot.status==='loading')body+='<p role="status">正在查询官方预警…</p>';
+      else if(snapshot.status==='error'||snapshot.key!==window.OfficialAlerts.endpoint(state.city))body+='<p role="status">官方预警暂不可用，当前状态未知。</p>';
+      else {
+        if(snapshot.status==='partial')body+='<p>部分官方资料无法核验，列表可能不完整。</p>';
+        if(!snapshot.alerts.length&&snapshot.status==='ready')body+='<p>此次查询未返回有效官方预警；不代表没有其他风险。</p>';
+        body+=snapshot.alerts.map(a=>'<details class="official-warning-item"><summary>'+escapeCityText(a.event)+' · '+escapeCityText(a.severity)+'</summary><p>'+escapeCityText(a.sender)+' · '+(a.upcoming?'将生效 ':'生效 ')+window.StormQuality.utcLabel(a.effective)+'<br>到期 '+window.StormQuality.utcLabel(a.expires)+'</p><p>'+escapeCityText(a.headline)+'</p><div class="official-warning-original">'+escapeCityText(a.description)+'</div><div class="official-warning-original">'+escapeCityText(a.instruction)+'</div></details>').join('');
+        if(snapshot.at)body+='<small>本机获取：'+window.StormQuality.utcLabel(new Date(snapshot.at).toISOString())+'；以官方生效和到期时间为准。</small>';
+      }
+      body+='<button class="text-action" id="officialAlertsRetry" type="button">重新查询官方预警</button><a class="official-warning-link" href="https://www.weather.gov/" target="_blank" rel="noopener noreferrer">NWS 官方来源 ↗</a>';
+    }
+    return '<section class="official-warning"><h2>官方预警 · '+escapeCityText(state.city.name||'所选地点')+'</h2>'+body+'</section>';
+  }
   function renderAlerts() {
     const items = [];
     state.storms.slice().sort(wpacFirst).forEach(function (s) {
@@ -3733,7 +3758,7 @@ body.loop-still .pill.bad {
     }
     const box = $("alertList");
     const riskCoverage = w ? insights.risk(w) : null;
-    const notice = '<div class="alert-source">这里是模型风险提示与台风资料汇总，不是气象部门发布的官方预警。' + escapeCityText(window.StormQuality.coverageNote) + ((state.stormQuality?.notes||[]).length ? escapeCityText(state.stormQuality.notes.join('；')) + '。' : '') +
+    const notice = (typeof officialWarningsMarkup==='function'?officialWarningsMarkup():'') + '<div class="alert-source">下方是模型风险提示与台风资料汇总，不是气象部门发布的官方预警。' + escapeCityText(window.StormQuality.coverageNote) + ((state.stormQuality?.notes||[]).length ? escapeCityText(state.stormQuality.notes.join('；')) + '。' : '') +
       (!w && state.weatherLoading ? '正在获取' + escapeCityText(state.city.name) + '的天气，暂不能判断该城市风险。' : insights.freshness(w).stale ? '城市天气数据缺失或已过期，无法判断当前风险。' : !riskCoverage.complete ? '部分预报缺失，无法完整判断天气风险；已知风险仍会展示。' : '时间按所选城市当地时间解读；请同时关注当地气象部门信息。') + '</div>' +
       '<details class="weather-source"><summary>城市风险来源与时效</summary><div class="source-content">' + escapeCityText(weatherProvenance(w, state.city)) + '</div></details>';
     if (!items.length) {
@@ -6586,6 +6611,7 @@ body.loop-still .pill.bad {
     if (cap) cap.textContent = "高清城市底图 · 已放大到城市细节，可继续放大至 19 级";
   }
   function bind() {
+    document.addEventListener('click',e=>{if(e.target.closest('#officialAlertsRetry')&&officialAlertsClient)officialAlertsClient.load(state.city,true);});
     $('appearance').value = appearance;
     $('appearance').addEventListener('change',function(){
       appearance=this.value;syncAppearance();
@@ -6949,6 +6975,7 @@ body.loop-still .pill.bad {
   document.addEventListener('visibilitychange', () => refreshVisibleRadar(false));
   function refreshTimeSensitiveCards() {
     if (document.hidden) return;
+    if(state.tab==='alerts')renderAlerts();
     if(state.tab==='sat' && ov('typhoon'))syncStormHud();
     if(state.tab==='sat' && state.satView==='2d' && state.satMap && needsMet() && !state.metLoadingKey &&
        (state.metLoadFailed || !state.metGrid || Date.now()-state.metGrid.loadedAt>=600000))loadMetGrid(false);

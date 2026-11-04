@@ -25,6 +25,13 @@ button, summary { touch-action:manipulation; }
 .nav-item::after { display:none; }
 .nav-item.active { color:var(--sky); }
 #weather { background:var(--bg); }
+.official-warning { padding:16px; margin-bottom:16px; border:1px solid var(--line); border-radius:16px; background:var(--bg-2); color:var(--text); }
+.official-warning h2 { font-size:17px; margin:0 0 10px; }
+.official-warning p, .official-warning small { font-size:13px; line-height:1.7; }
+.official-warning small { display:block; color:var(--muted); }
+.official-warning-link { display:inline-flex; align-items:center; min-height:44px; color:var(--sky); font-size:14px; text-decoration:underline; }
+.official-warning-item summary { min-height:44px; padding:10px 0; cursor:pointer; font-size:14px; }
+.official-warning-original { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.7; font-size:13px; margin:10px 0; }
 /* Brand artwork stays in the app icon; the weather card reflects actual conditions. */
 #weather #wxSky { visibility:hidden; }
 #weather .scroll { padding:10px 18px 28px; }
