@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<link rel="preload" as="style" href="assets/ui-clean.css?v=32.06.1">
+<link rel="preload" as="style" href="assets/ui-clean.css?v=32.07">
 <title>天气预报 · 验收预览</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
@@ -1454,7 +1454,7 @@ body.loop-still .pill.bad {
 @media (max-width: 480px) { .hero::before { background-position: 68% center; } }
 @media (prefers-reduced-motion: reduce) { .clothing-person, .clothing-umbrella, .clothing-rain, .sat-wind-barb svg { animation:none !important; } }
 </style>
-<link rel="stylesheet" href="assets/ui-clean.css?v=32.06.1">
+<link rel="stylesheet" href="assets/ui-clean.css?v=32.07">
 </head>
 <body>
 <div id="app">
@@ -1760,7 +1760,10 @@ body.loop-still .pill.bad {
               <div class="sat-ticks" id="satTicks" role="slider" aria-label="时间轴"></div>
             </div>
             <div id="boundaryReviewNotice" role="status" hidden>对照示意线未核准，不可作国界依据</div>
-            <div class="sat-caption" id="satCaption">现在：雷达实况</div>
+            <details class="sat-data-details" id="satDataDetails">
+              <summary><span id="satDataSummary">图层状态与说明</span><span class="sat-data-action">详情</span></summary>
+              <div class="sat-caption" id="satCaption">现在：雷达实况</div>
+            </details>
             <div class="sat-credit">© NASA · Esri · RainViewer</div>
             <div class="sat-credit" id="satLabelAttribution" hidden><a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://openmaptiles.org" target="_blank" rel="noopener">© OpenMapTiles</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></div>
             <div id="sat3dAttribution" aria-label="三维地图来源"></div>
@@ -1828,7 +1831,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">32.06</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">32.07</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -4085,6 +4088,19 @@ body.loop-still .pill.bad {
     }
     if (future) return {t:null,rh:null,ws:null,wd:null,p:null,mm:null,pop:null,cloud:null,code:null};
     return { t: pt.t, rh: pt.rh, ws: pt.ws, wd: pt.wd, p: pt.p, mm: pt.mm, pop: pt.pop, cloud:pt.cloud, code:null };
+  }
+  function captionSummary(text) {
+    if(/失败|不可用|过期|时间异常|资料滞后|数据暂缺|资料可能滞后|未完整加载|中断|暂无临近/.test(text))
+      return {text:'图层资料不完整 · 空白不代表无雨或晴空',warning:true};
+    if(/加载中|绘制中|正在加载/.test(text))return {text:'正在加载图层 · 详情查看当前进度',warning:false};
+    if(/非未来卫星实拍/.test(text))return {text:'云雨模型预报 · 非卫星实拍',warning:false};
+    return {text:'图层状态与说明',warning:false};
+  }
+  function syncCaptionSummary() {
+    const caption=$('satCaption'),label=$('satDataSummary'),details=$('satDataDetails');
+    if(!caption||!label||!details)return;
+    const summary=captionSummary(caption.textContent||'');
+    label.textContent=summary.text;details.classList.toggle('has-warning',summary.warning);
   }
   function updateCaption() {
     const el = $("satCaption");
@@ -6806,6 +6822,8 @@ body.loop-still .pill.bad {
     $("citySearchRetry").addEventListener("click", submitSearch);
   }
   function init() {
+    const caption=$('satCaption');
+    if(caption){new MutationObserver(syncCaptionSummary).observe(caption,{childList:true,characterData:true,subtree:true});syncCaptionSummary();}
     state.recents = readCityList(REC_KEY, 8);
     state.favorites = readCityList(FAV_KEY, 12);
     const saved = loadCity();
