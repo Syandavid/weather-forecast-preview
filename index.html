@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<link rel="preload" as="style" href="assets/ui-clean.css?v=32.07">
+<link rel="preload" as="style" href="assets/ui-clean.css?v=32.08">
 <title>天气预报 · 验收预览</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
@@ -1454,7 +1454,7 @@ body.loop-still .pill.bad {
 @media (max-width: 480px) { .hero::before { background-position: 68% center; } }
 @media (prefers-reduced-motion: reduce) { .clothing-person, .clothing-umbrella, .clothing-rain, .sat-wind-barb svg { animation:none !important; } }
 </style>
-<link rel="stylesheet" href="assets/ui-clean.css?v=32.07">
+<link rel="stylesheet" href="assets/ui-clean.css?v=32.08">
 </head>
 <body>
 <div id="app">
@@ -1757,7 +1757,7 @@ body.loop-still .pill.bad {
               </button>
               <div class="sat-play-time" id="satPlayTime">今天 —</div>
               <button class="sat-now-btn" id="satNow" type="button">现在</button>
-              <div class="sat-ticks" id="satTicks" role="slider" aria-label="时间轴"></div>
+              <div class="sat-ticks" id="satTicks" role="slider" aria-label="时间轴" aria-description="按资料帧排列；历史观测与逐小时预报间隔可能不同"></div>
             </div>
             <div id="boundaryReviewNotice" role="status" hidden>对照示意线未核准，不可作国界依据</div>
             <details class="sat-data-details" id="satDataDetails">
@@ -1831,7 +1831,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">32.07</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">32.08</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -3987,6 +3987,19 @@ body.loop-still .pill.bad {
     for(const name of ['pointercancel','lostpointercapture'])ticks.addEventListener(name,e=>{if(e.pointerId===owner)clear();});
     if(!window.PointerEvent)ticks.addEventListener('click',e=>{stopRadarLoop();seek(e.clientX);});
   }
+  function timelineLabels(frames) {
+    const n=frames.length;if(!n)return [];
+    const zone=state.mapClockMode==='utc'?{...mapClock(),tz:'UTC'}:mapClock();
+    return [...new Set([0,Math.round((n-1)/2),n-1])].map(i=>{
+      const date=new Date(frames[i].time*1000);
+      let text='时间待定';
+      if(Number.isFinite(date.getTime())){
+        if(zone.tz==='UTC')text=date.toISOString().slice(5,16).replace('T',' ');
+        else {const parts=ymdParts(date,zone);text=partVal(parts,'month')+'-'+partVal(parts,'day')+' '+partVal(parts,'hour')+':'+partVal(parts,'minute');}
+      }
+      return {index:i,percent:n>1?i/(n-1)*100:0,text};
+    });
+  }
   function updatePlayhead() {
     const frames = playFrames();
     const n = frames.length;
@@ -4006,7 +4019,8 @@ body.loop-still .pill.bad {
     ticks.setAttribute('aria-valuemin', '0');
     ticks.setAttribute('aria-valuemax', String(n-1));
     ticks.setAttribute('aria-valuenow', String(idx));
-    const stamp = n + ':' + frames.findIndex(f=>f.kind==='now') + ':' + (state.loopRange || 'all');
+    const stamp = n + ':' + frames.findIndex(f=>f.kind==='now') + ':' + (state.loopRange || 'all') +
+      ':' + frames[0].time + ':' + frames[n-1].time + ':' + state.mapClockMode + ':' + mapClock().tz;
     if (ticks.getAttribute("data-n") !== stamp) {
       let html = "";
       for (let i = 0; i < n; i++) {
@@ -4016,6 +4030,10 @@ body.loop-still .pill.bad {
       html += '<div class="sat-now-mark" id="satNowMark"><b>现在</b></div>';
       html += '<div class="sat-playhead" id="satPlayhead"></div>';
       html += '<div class="sat-fc-na" id="satFcNa">预报场暂不可用</div>';
+      for(const label of timelineLabels(frames)){
+        const side=label.percent===0?'start':label.percent===100?'end':'middle';
+        html+='<span class="sat-time-label '+side+'" style="left:'+label.percent+'%" aria-hidden="true">'+label.text+'</span>';
+      }
       ticks.innerHTML = html;
       ticks.setAttribute("data-n", stamp);
     }

@@ -178,6 +178,11 @@ button, summary { touch-action:manipulation; }
 .sat-data-details.has-warning > summary { color:#ffe0a3; }
 .sat-data-details > summary:focus-visible { outline:2px solid #9fd2ff; border-radius:6px; }
 .sat-data-details .sat-caption { margin:0 0 10px; color:#d7e2ef; }
+.sat-time-label { position:absolute; bottom:0; color:#c1ccdc; font-size:10px; font-variant-numeric:tabular-nums; white-space:nowrap; pointer-events:none; background:rgba(14,24,40,.94); z-index:5; padding-top:2px; }
+.sat-time-label.middle { transform:translateX(-50%); }
+.sat-time-label.end { transform:translateX(-100%); }
+#sat .sat-tick::before { bottom:18px; }
+#sat .sat-tick:nth-child(odd)::before { height:8px; }
 /* Real hit targets, not just larger icons. Keep the legend clear of zoom controls. */
 #sat button { min-width:44px; min-height:44px; }
 #sat .leaflet-control-zoom a { width:44px !important; height:44px !important; line-height:44px !important; }
