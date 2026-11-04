@@ -1,4 +1,4 @@
-const CACHE = "weather-acceptance-v32.14";
+const CACHE = "weather-acceptance-v32.15";
 const ASSETS = [
   "./index.html",
   "./assets/weather-insights.js?v=31.98",
@@ -13,7 +13,7 @@ const ASSETS = [
   "./assets/road-overlay.js?v=31.32",
   "./assets/label-locale.js?v=31.94",
   "./assets/vector-labels.js?v=31.94.1",
-  "./assets/ui-clean.css?v=32.14",
+  "./assets/ui-clean.css?v=32.15",
   "./manifest.webmanifest",
   "./icon-192-v3.png",
   "./icon-512-v3.png",

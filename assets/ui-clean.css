@@ -241,12 +241,15 @@ button, summary { touch-action:manipulation; }
 .sat-storms { max-width:calc(100% - 190px); }
 #satStormsPeek { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 @media (min-width:960px) {
-  #app { grid-template-columns:150px minmax(0,1fr); max-width:1480px; }
+  /* The map is a workspace, not a centred article: use the browser's full width. */
+  #app { grid-template-columns:150px minmax(0,1fr); width:100%; max-width:none; margin:0; border-inline:0; }
   .nav { padding-inline:14px; }
   .nav-brand { font-size:16px; padding:6px 8px 30px; }
   .nav-item { font-size:14px; margin-bottom:6px; min-height:46px; }
   .topbar { padding:14px 32px; }
-  #weather .scroll { padding:20px 32px 40px; }
+  #weather .scroll { width:100%; max-width:1280px; align-self:center; padding:20px 32px 40px; }
+  #alerts .scroll { width:100%; max-width:1120px; align-self:center; }
+  #sat .sat-playbar { width:min(1120px,calc(100% - 32px)); left:50%; right:auto; transform:translateX(-50%); }
   .wx-split { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:40px; }
   .wx-split > div { min-width:0; }
   .wx-split > div + div { margin-top:0; }
@@ -256,6 +259,9 @@ button, summary { touch-action:manipulation; }
   .sheet.open { align-items:center; }
   .sheet-card { border-radius:24px; max-width:520px; }
   .history-tools { grid-template-columns:repeat(4,minmax(0,1fr)); }
+}
+@media (min-width:960px) and (max-width:1179px) {
+  .wx-split { grid-template-columns:minmax(0,1fr); gap:24px; }
 }
 @media (max-width:959px) {
   .sat-rail.open { width:min(280px,calc(100% - 32px)); top:66px; right:16px; bottom:calc(var(--sat-playbar-height, 100px) + 35px); }

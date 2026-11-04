@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<link rel="preload" as="style" href="assets/ui-clean.css?v=32.14">
+<link rel="preload" as="style" href="assets/ui-clean.css?v=32.15">
 <title>天气预报 · 验收预览</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
@@ -1276,7 +1276,7 @@ body.loop-still .pill.bad {
     grid-template-columns: 220px 1fr;
     grid-template-rows: auto 1fr;
     grid-template-areas: "nav top" "nav main";
-    max-width: 1400px; margin: 0 auto;
+    width: 100%; max-width: none; margin: 0;
     border-left: 1px solid var(--line); border-right: 1px solid var(--line);
   }
   .nav {
@@ -1454,7 +1454,7 @@ body.loop-still .pill.bad {
 @media (max-width: 480px) { .hero::before { background-position: 68% center; } }
 @media (prefers-reduced-motion: reduce) { .clothing-person, .clothing-umbrella, .clothing-rain, .sat-wind-barb svg { animation:none !important; } }
 </style>
-<link rel="stylesheet" href="assets/ui-clean.css?v=32.14">
+<link rel="stylesheet" href="assets/ui-clean.css?v=32.15">
 </head>
 <body>
 <div id="app">
@@ -1840,7 +1840,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">32.14</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">32.15</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -2853,6 +2853,23 @@ body.loop-still .pill.bad {
       }
     });
     state.trendResizeObserver.observe(box);
+  }
+  function observeMapViewport() {
+    const wrap = $('satMap')?.parentElement;
+    if (!wrap || !window.ResizeObserver || state.mapViewportObserver) return;
+    let lastWidth = 0, lastHeight = 0, pending = false;
+    state.mapViewportObserver = new window.ResizeObserver(() => {
+      const width = wrap.clientWidth, height = wrap.clientHeight;
+      if (!(width > 0 && height > 0) || (width === lastWidth && height === lastHeight)) return;
+      lastWidth = width; lastHeight = height;
+      if (pending || state.tab !== 'sat' || document.hidden) return;
+      pending = true;
+      window.requestAnimationFrame(() => {
+        pending = false;
+        if (state.tab === 'sat' && !document.hidden) invalidateMaps();
+      });
+    });
+    state.mapViewportObserver.observe(wrap);
   }
   function observeMapControls() {
     const bar = $('satPlaybar'), panel = $('sat');
@@ -6681,6 +6698,7 @@ body.loop-still .pill.bad {
     ['historyStart','historyEnd'].forEach(id=>$(id).addEventListener('focus',syncHistoryControls));
     observeTrendSize();
     observeMapControls();
+    observeMapViewport();
     const refreshBtn = $("refreshBtn");
     $('wxRetry').addEventListener('click',()=>{if(!state.weatherLoading)loadWeather();});
     if (refreshBtn) refreshBtn.addEventListener("click", async function () {
