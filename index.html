@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<link rel="preload" as="style" href="assets/ui-clean.css?v=32.08">
+<link rel="preload" as="style" href="assets/ui-clean.css?v=32.10.1">
 <title>天气预报 · 验收预览</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
@@ -1454,7 +1454,7 @@ body.loop-still .pill.bad {
 @media (max-width: 480px) { .hero::before { background-position: 68% center; } }
 @media (prefers-reduced-motion: reduce) { .clothing-person, .clothing-umbrella, .clothing-rain, .sat-wind-barb svg { animation:none !important; } }
 </style>
-<link rel="stylesheet" href="assets/ui-clean.css?v=32.08">
+<link rel="stylesheet" href="assets/ui-clean.css?v=32.10.1">
 </head>
 <body>
 <div id="app">
@@ -1475,6 +1475,7 @@ body.loop-still .pill.bad {
   </nav>
   <header class="topbar">
     <button class="city-btn" id="cityBtn" type="button">上海 <small>选择城市</small></button>
+    <div id="mapModeDock" hidden></div>
     <div class="top-actions">
       <button class="icon-btn" id="geoBtn" type="button" title="定位" aria-label="定位"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
       <button class="icon-btn" id="refreshBtn" type="button" title="刷新天气和台风" aria-label="刷新天气和台风"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.8-3L3 11"/><path d="M3 5v6h6"/><path d="M4 13a8 8 0 0 0 14.8 3L21 13"/><path d="M21 19v-6h-6"/></svg></button>
@@ -1601,11 +1602,12 @@ body.loop-still .pill.bad {
               <span id="satWindDir">—</span>
             </span>
           </button>
-          <div class="sat-view-switch sat-glass" role="group" aria-label="地图模式">
+          <div class="sat-view-switch sat-glass" id="satModeSwitch" role="group" aria-label="地图模式">
             <button class="sat-view-btn on" data-view="2d" type="button">2D 天气</button>
             <button class="sat-view-btn" data-view="3d" type="button">3D 城市</button>
             <button class="sat-view-btn" data-view="pro" type="button">专业云雨</button>
           </div>
+          <span id="mapModeHome" hidden></span>
           <aside class="sat-rail" id="satRail" aria-label="天气图层">
             <div class="sat-rail-header"><div><div class="sat-rail-title">天气图层</div><small>按需叠加，地图仍可拖动</small></div><button class="sat-rail-close" id="satRailClose" type="button" aria-label="关闭图层">×</button></div>
             <div class="sat-weather-grid" role="group" aria-label="常用天气图层">
@@ -1727,6 +1729,7 @@ body.loop-still .pill.bad {
             <svg viewBox="0 0 24 24"><rect x="4" y="9" width="11" height="11" rx="1.6"/><rect x="9" y="4" width="11" height="11" rx="1.6"/></svg>
           </button>
           <button class="sat-route-fab" id="satRouteBtn" type="button" title="打开路线选择模式" aria-pressed="false">路线</button>
+          <span id="mapToolsHome" hidden></span>
           <section class="sat-route-panel" id="satRoutePanel" aria-label="出行路线查询">
             <div class="sat-route-head"><strong>出行路线 · 途经天气</strong><button class="sat-route-close" id="satRouteClose" type="button" aria-label="关闭路线查询">×</button></div>
             <div class="sat-route-form">
@@ -1831,7 +1834,7 @@ body.loop-still .pill.bad {
   <div class="sheet-card about">
     <div class="handle"></div>
     <h2>说明</h2>
-    <p>当前页面版本：<strong id="appBuild">32.09</strong>（以此处为准，不以网址参数为准）</p>
+    <p>当前页面版本：<strong id="appBuild">32.10</strong>（以此处为准，不以网址参数为准）</p>
     <label class="appearance-setting">显示外观 <select id="appearance" aria-label="显示外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
     <p>天气预报是静态网页，也可加到主屏幕当独立应用使用。核心功能无需账号。</p>
     <p>城市天气和历史再分析来自 Open-Meteo，并非站点实测。NASA GIBS 提供真实色日合成；红外按地图中心选用葵花或 GOES 东／西卫星。没有合适视角时会提示覆盖不足，空白不代表晴空。雷达来自 RainViewer。</p>
@@ -2586,8 +2589,24 @@ body.loop-still .pill.bad {
     try { localStorage.setItem(FAV_KEY, JSON.stringify(state.favorites)); } catch (e) {}
     renderFavorites();
   }
+  function syncMapModeDock() {
+    const group=$('satModeSwitch'),dock=$('mapModeDock'),home=$('mapModeHome');
+    if(!group||!dock||!home)return;
+    const toolsHome=$('mapToolsHome'),tools=[$('satLayersBtn'),$('satRouteBtn')].filter(Boolean);
+    const compact=state.tab==='sat'&&window.matchMedia('(max-height:480px) and (orientation:landscape)').matches;
+    dock.hidden=!compact;
+    dock.parentNode.classList.toggle('map-mode-compact',compact);
+    if(compact){
+      if(group.parentNode!==dock)dock.appendChild(group);
+      for(const tool of tools){if(tool.parentNode!==dock)dock.appendChild(tool);tool.hidden=state.satView==='pro';}
+    }else{
+      if(group.parentNode!==home.parentNode)home.parentNode.insertBefore(group,home);
+      if(toolsHome)for(const tool of tools){toolsHome.parentNode.insertBefore(tool,toolsHome);tool.hidden=false;}
+    }
+  }
   function showTab(id) {
     state.tab = id;
+    syncMapModeDock();
     document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === id));
     document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.getAttribute("data-tab") === id));
     syncMotion();
@@ -6483,6 +6502,7 @@ body.loop-still .pill.bad {
     if (proWeatherController) proWeatherController.setActive(active);
   }
   function syncSatView() {
+    syncMapModeDock();
     const wrap = document.querySelector(".map-wrap");
     if (wrap) wrap.classList.toggle("view-3d", state.satView === "3d");
     if (wrap) wrap.classList.toggle("view-pro", state.satView === "pro");
@@ -6920,7 +6940,7 @@ body.loop-still .pill.bad {
       refreshVisibleRadar(false);
     }, 5 * 60 * 1000);
   }
-  window.addEventListener("resize", function () { invalidateMaps(); resizeParticles(); syncSatRail(); });
+  window.addEventListener("resize", function () { syncMapModeDock(); invalidateMaps(); resizeParticles(); syncSatRail(); });
   document.addEventListener("visibilitychange", syncMotion);
   document.addEventListener('visibilitychange',resumeStormCheck);
   window.addEventListener('pageshow',resumeStormCheck);

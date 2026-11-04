@@ -14,6 +14,11 @@ button, summary { touch-action:manipulation; }
 .city-btn small { flex:none; font-size:12px; }
 .city-btn { min-width:44px; min-height:44px; }
 .top-actions { gap:4px; flex:none; }
+#mapModeDock { display:flex; align-items:center; gap:4px; flex:none; margin-inline:auto; }
+#mapModeDock > .sat-view-switch { position:static; transform:none; margin:0; }
+#mapModeDock > .sat-fab, #mapModeDock > .sat-route-fab { position:static; flex:none; min-width:44px; min-height:44px; margin:0; }
+.topbar.map-mode-compact .city-btn { flex:1; overflow:hidden; white-space:nowrap; font-size:16px; }
+.topbar.map-mode-compact .city-btn small { display:none; }
 .icon-btn { width:44px; height:44px; background:transparent; border-radius:12px; color:#acbcd0; }
 .nav { background:var(--bg); box-shadow:none; }
 .nav-item { font-size:12px; min-height:56px; gap:5px; }
@@ -217,6 +222,8 @@ button, summary { touch-action:manipulation; }
 #sat .maplibregl-ctrl-attrib-inner { overflow-wrap:anywhere; }
 #sat #sat3dAttribution .maplibregl-ctrl-attrib { margin:0; padding:2px 5px; max-width:100%; border-radius:4px; }
 @media (max-height:480px) and (orientation:landscape) {
+  #sat .sat-playbar { gap:0; padding-block:4px; bottom:6px; }
+  #sat .sat-playbar-row { display:flex; }
   #sat .maplibregl-ctrl-group { display:flex; }
   #sat .maplibregl-ctrl-group button + button { border-top:0; border-left:1px solid rgba(255,255,255,.16); }
 }
